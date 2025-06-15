@@ -5,7 +5,7 @@ const { Buffer } = require('buffer');
 const app = express();
 const port = process.env.PORT || 3000;
 
-let mytoken = 'auto00321';
+let myToken = 'auto00321';
 let BotToken = '';
 let ChatID = '';
 let TG = 0;
@@ -30,7 +30,7 @@ app.get('/:path', async (req, res) => {
     const pathToken = req.params.path;
 
     // 使用环境变量覆盖默认值
-    mytoken = process.env.TOKEN || mytoken;
+    myToken = process.env.TOKEN || myToken;
     BotToken = process.env.TGTOKEN || BotToken;
     ChatID = process.env.TGID || ChatID;
     TG = process.env.TG ? Number(process.env.TG) : TG;
@@ -38,7 +38,7 @@ app.get('/:path', async (req, res) => {
     subConfig = process.env.SUBCONFIG || subConfig;
     FileName = process.env.SUBNAME || FileName;
 
-    if(token !== mytoken && pathToken !== mytoken){
+    if(token !== myToken && pathToken !== myToken){
       res.status(403).type('text/plain; charset=utf-8').set('Profile-Update-Interval', SUBUpdateTime.toString());
       return res.send('oh no!');
     }
@@ -109,7 +109,7 @@ app.get('/:path', async (req, res) => {
 async function fetchInBatches(协议列表, 编码后的订阅URLs) {
   // 构造所有请求的 Promise 数组
   const fetchPromises = 协议列表.map(async 协议 => {
-    let url = `${subProtocol}://${subConverter}/sub?target=${协议}&url=${编码后的订阅URLs}`;
+    let url = `${subProtocol}://${subConverter}/sub?target=${协议}&url=${编码后的订阅URLs}&emoji=true&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
     try {
       const resp = await fetch(url, {
         headers: { 'User-Agent': 'Node-fetch', 'Accept': '*/*' },
@@ -129,11 +129,11 @@ async function fetchInBatches(协议列表, 编码后的订阅URLs) {
   return results.join('\n') + '\n';
 }
 
-async function ADD(envadd) {
-  let addtext = envadd.replace(/[\t"'|\r\n]+/g, '\n').replace(/\n+/g, '\n');
-  if (addtext.charAt(0) === '\n') addtext = addtext.slice(1);
-  if (addtext.charAt(addtext.length - 1) === '\n') addtext = addtext.slice(0, addtext.length - 1);
-  const add = addtext.split('\n');
+async function ADD(envAdd) {
+  let addText = envAdd.replace(/[\t"'|\r\n]+/g, '\n').replace(/\n+/g, '\n');
+  if (addText.charAt(0) === '\n') addText = addText.slice(1);
+  if (addText.charAt(addText.length - 1) === '\n') addText = addText.slice(0, addText.length - 1);
+  const add = addText.split('\n');
   console.log('节点列表:', add);
   return add;
 }
