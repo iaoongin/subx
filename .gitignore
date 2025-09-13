@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Config file - contains sensitive configuration and user data
+data/config.json
+
+# Session files - contains user sessions
+data/sessions/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

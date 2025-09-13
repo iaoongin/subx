@@ -1,0 +1,43 @@
+{
+  "subscriptions": [
+    {
+      "id": 1,
+      "name": "示例订阅1",
+      "url": "https://example.com/api/v1/client/subscribe?token=YOUR_TOKEN_HERE",
+      "description": "第一个示例订阅链接",
+      "active": 1,
+      "created_at": "2024-12-13T12:00:00.000Z",
+      "updated_at": "2024-12-13T12:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "name": "示例订阅2",
+      "url": "https://example.com/api/v1/client/subscribe?token=YOUR_TOKEN_HERE_2",
+      "description": "第二个示例订阅链接",
+      "active": 1,
+      "created_at": "2024-12-13T12:00:00.000Z",
+      "updated_at": "2024-12-13T12:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "name": "示例订阅3",
+      "url": "https://example.com/share/example/config-id/speed.yaml",
+      "description": "第三个示例订阅链接",
+      "active": 1,
+      "created_at": "2024-12-13T12:00:00.000Z",
+      "updated_at": "2024-12-13T12:00:00.000Z"
+    }
+  ],
+  "nextId": 4,
+  "config": {
+    "token": "YOUR_API_TOKEN_HERE",
+    "botToken": "YOUR_BOT_TOKEN_HERE",
+    "chatId": "YOUR_CHAT_ID_HERE",
+    "tg": 0,
+    "fileName": "您的文件名",
+    "subUpdateTime": 6,
+    "total": 99,
+    "timestamp": 4102329600000,
+    "adminPassword": "YOUR_ADMIN_PASSWORD_HERE"
+  }
+}
