@@ -116,6 +116,8 @@ class Database {
 
   // 获取所有活跃的订阅地址
   getActiveSubscriptions() {
+    // 确保获取最新数据
+    this.loadData();
     return new Promise((resolve) => {
       const activeSubscriptions = this.data.subscriptions.filter(
         (sub) => sub.active === 1
@@ -126,6 +128,8 @@ class Database {
 
   // 获取所有订阅地址（包括非活跃的）
   getAllSubscriptions() {
+    // 确保获取最新数据
+    this.loadData();
     return new Promise((resolve) => {
       resolve([...this.data.subscriptions]);
     });
@@ -238,6 +242,8 @@ class Database {
 
   // 获取活跃订阅地址的URL列表
   getActiveSubscriptionUrls() {
+    // 确保获取最新数据
+    this.loadData();
     return new Promise((resolve) => {
       const activeUrls = this.data.subscriptions
         .filter((sub) => sub.active === 1)
@@ -250,6 +256,8 @@ class Database {
 
   // 获取所有配置
   getConfig() {
+    // 确保获取最新数据
+    this.loadData();
     return new Promise((resolve) => {
       resolve({ ...this.data.config });
     });
