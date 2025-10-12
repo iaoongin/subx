@@ -160,7 +160,36 @@ app.post("/api/auth/logout", (req, res) => {
 app.get("/api/subscriptions", async (req, res) => {
   try {
     const subscriptions = await db.getAllSubscriptions();
-    res.json(subscriptions);
+    // 实时拉取每个订阅的流量信息，接口为订阅的 url 字段
+    const result = await Promise.all(
+      subscriptions.map(async (sub) => {
+        let userinfo = { upload: 0, download: 0, total: 0, expire: 0 };
+        try {
+          if (sub.url) {
+            const resp = await fetch(sub.url, {
+              headers: { "User-Agent": "Clash" },
+            });
+            if (resp.ok) {
+              // 从响应头获取 subscription-userinfo
+              const infoStr = resp.headers.get("subscription-userinfo");
+              if (infoStr) {
+                // 解析格式：upload=...; download=...; total=...; expire=...
+                infoStr.split(";").forEach((pair) => {
+                  const [key, value] = pair.split("=").map((s) => s.trim());
+                  if (["upload", "download", "total", "expire"].includes(key)) {
+                    userinfo[key] = Number(value) || 0;
+                  }
+                });
+              }
+            }
+          }
+        } catch (e) {
+          console.error("拉取流量信息失败", sub.url, e);
+        }
+        return { ...sub, userinfo };
+      })
+    );
+    res.json(result);
   } catch (error) {
     console.error("获取订阅列表失败:", error);
     res.status(500).json({ error: "获取订阅列表失败" });

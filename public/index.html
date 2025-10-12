@@ -226,78 +226,193 @@
       }
 
       .subscription-item {
-        border: 1px solid #e1e1e1;
-        border-radius: 8px;
-        margin-bottom: 15px;
-        padding: 20px;
-        background: #fafafa;
-        transition: all 0.3s;
+        border: none;
+        border-radius: 16px;
+        margin-bottom: 20px;
+        padding: 25px;
+        background: white;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .subscription-item::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        opacity: 0;
+        transition: opacity 0.3s ease;
       }
 
       .subscription-item:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+      }
+
+      .subscription-item:hover::before {
+        opacity: 1;
       }
 
       .subscription-item.inactive {
-        opacity: 0.6;
+        opacity: 0.75;
         background: #f8f9fa;
+      }
+
+      .subscription-item.inactive::before {
+        background: #cbd5e0;
       }
 
       .subscription-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 10px;
+        margin-bottom: 15px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid #f0f0f0;
       }
 
       .subscription-name {
-        font-size: 1.2rem;
-        font-weight: 600;
-        color: #333;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #2d3748;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .subscription-name::before {
+        content: "📡";
+        font-size: 1.1rem;
       }
 
       .subscription-status {
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 500;
+        padding: 6px 12px;
+        border-radius: 30px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
       }
 
       .status-active {
-        background: #d4edda;
-        color: #155724;
+        background: #c6f6d5;
+        color: #2f855a;
+      }
+
+      .status-active::before {
+        content: "●";
+        color: #38a169;
       }
 
       .status-inactive {
-        background: #f8d7da;
-        color: #721c24;
+        background: #fed7d7;
+        color: #9b2c2c;
+      }
+
+      .status-inactive::before {
+        content: "○";
+        color: #e53e3e;
       }
 
       .subscription-url {
-        color: #667eea;
+        color: #4a5568;
         word-break: break-all;
-        margin-bottom: 10px;
-        font-family: "Courier New", monospace;
-        background: #f1f3f4;
-        padding: 8px;
-        border-radius: 4px;
+        margin: 15px 0;
+        font-family: "SF Mono", "Cascadia Code", "Fira Code", monospace;
+        background: #f7fafc;
+        padding: 12px;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        border: 1px dashed #e2e8f0;
       }
 
       .subscription-description {
-        color: #666;
-        margin-bottom: 15px;
-        font-style: italic;
+        color: #718096;
+        margin: 15px 0;
+        line-height: 1.6;
+        font-size: 0.95rem;
       }
 
       .subscription-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
         font-size: 0.9rem;
-        color: #888;
-        margin-bottom: 15px;
+        color: #718096;
+        margin: 15px 0;
+        padding-top: 15px;
+        border-top: 1px solid #f0f0f0;
+      }
+
+      .subscription-meta-row {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+      }
+
+      .subscription-meta span {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .subscription-meta span::before {
+        font-size: 1.1rem;
+      }
+
+      .meta-date::before {
+        content: "🕒";
+      }
+
+      .meta-traffic::before {
+        content: "📊";
+      }
+
+      .usage-bar {
+        display: flex;
+        height: 8px;
+        width: 100%;
+        border-radius: 4px;
+        overflow: hidden;
+        background: #e2e8f0;
+      }
+
+      .usage-download {
+        height: 100%;
+        background: linear-gradient(90deg, #4f86ff 0%, #3b6ef0 100%);
+      }
+
+      .usage-upload {
+        height: 100%;
+        background: linear-gradient(90deg, #38c172 0%, #2fb86a 100%);
+      }
+
+      .usage-icon {
+        display: inline-block;
+        margin-left: 8px;
+        font-size: 1rem;
+        vertical-align: middle;
+        opacity: 0.9;
       }
 
       .subscription-actions {
-        text-align: right;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 20px;
+        opacity: 0.8;
+        transition: opacity 0.3s ease;
+      }
+
+      .subscription-item:hover .subscription-actions {
+        opacity: 1;
       }
 
       .loading {
@@ -917,104 +1032,269 @@
       class SubscriptionManager {
         constructor() {
           this.apiBase = "";
+          this.subscriptions = [];
           this.init();
         }
 
         async init() {
-          await this.loadSubscriptions();
-          this.bindEvents();
+          try {
+            await this.loadSubscriptions();
+            this.bindEvents();
+          } catch (error) {
+            console.error("Failed to initialize:", error);
+          }
         }
 
         bindEvents() {
-          // 修改为模态框表单的ID
-          document.getElementById("addForm").addEventListener("submit", (e) => {
-            e.preventDefault();
-            this.addSubscription();
-          });
+          document
+            .getElementById("addForm")
+            ?.addEventListener("submit", (e) => {
+              e.preventDefault();
+              this.addSubscription();
+            });
         }
 
         async loadSubscriptions() {
           try {
-            const response = await fetch("/api/subscriptions");
-            const subscriptions = await response.json();
-            this.renderSubscriptions(subscriptions);
-            this.updateStats(subscriptions);
+            console.log("Fetching subscriptions...");
+            const response = await fetch(this.apiBase + "/api/subscriptions");
+            if (!response.ok) throw new Error("Failed to fetch subscriptions");
+            this.subscriptions = await response.json();
+            console.log("Fetched subscriptions:", this.subscriptions);
+            this.renderSubscriptions(this.subscriptions);
+            this.updateStats(this.subscriptions);
           } catch (error) {
-            this.showMessage("加载订阅列表失败：" + error.message, "error");
+            console.error("Error loading subscriptions:", error);
+            document.getElementById("subscriptionsList").innerHTML =
+              '<div class="error">加载失败，请稍后重试</div>';
           }
+        }
+
+        updateStats(subscriptions) {
+          const total = subscriptions.length;
+          const active = subscriptions.filter((s) => s.active).length;
+          const inactive = total - active;
+
+          document.getElementById("totalCount").textContent = total;
+          document.getElementById("activeCount").textContent = active;
+          document.getElementById("inactiveCount").textContent = inactive;
+        }
+
+        getUsageClass(usage) {
+          if (usage <= 50) return "low";
+          if (usage <= 80) return "medium";
+          return "high";
+        }
+
+        formatTraffic(bytes, total) {
+          // 兼容保留：当只有合并使用率需要时仍可使用原展示（单色进度条）
+          console.log("formatTraffic input:", { bytes, total });
+          const bytesInGB = bytes / 1024 / 1024 / 1024;
+          const totalInGB = total / 1024 / 1024 / 1024;
+          console.log("formatTraffic converted:", { bytesInGB, totalInGB });
+
+          if (!totalInGB) return "";
+          const usage = Math.min(
+            100,
+            Math.round((bytesInGB / totalInGB) * 100)
+          );
+          const usageClass = this.getUsageClass(usage);
+          return `
+            <div class="usage-bar">
+              <div class="usage-progress ${usageClass}" style="width: ${usage}%"></div>
+            </div>
+            <span class="usage-text">${usage}%</span>
+          `;
+        }
+
+        formatUsageBar(upload, download, total) {
+          // 仅返回分段进度条（不包含文本），文本将放到上一行显示
+          if (!total || total <= 0) return "";
+
+          const up = upload || 0;
+          const down = download || 0;
+
+          let downPct = Math.round((down / total) * 100);
+          let upPct = Math.round((up / total) * 100);
+
+          if (downPct + upPct > 100) {
+            const scale = 100 / (downPct + upPct);
+            downPct = Math.round(downPct * scale);
+            upPct = 100 - downPct;
+          }
+
+          return `
+            <div class="usage-bar">
+              <div class="usage-download" style="width:${downPct}%"></div>
+              <div class="usage-upload" style="width:${upPct}%"></div>
+            </div>
+          `;
+        }
+
+        formatUsageSummary(upload, download, total) {
+          // 返回文本形式的用量摘要： (↓ xGB ↑ yGB) / totalGB，并在后面追加图标
+          if (!total || total <= 0)
+            // return '(↓ 0GB ↑ 0GB) / 0GB <span class="usage-icon">📉</span>';
+            return `总流量： 0GB `;
+          const up = upload || 0;
+          const down = download || 0;
+          const totalInGB = Math.round(total / 1024 / 1024 / 1024);
+          const downGB = Math.round(down / 1024 / 1024 / 1024);
+          const upGB = Math.round(up / 1024 / 1024 / 1024);
+          // 追加一个小图标放在文本后面
+          return `总流量： ${totalInGB}GB `;
+          // <span class=\"usage-icon\"> ↓ ${downGB}GB ↑ ${upGB}GB</span>`;
+        }
+
+        formatExpireTime(expire) {
+          // 如果没有到期时间，返回 0（不显示“永不过期”）
+          if (!expire) return "0";
+
+          const now = Date.now();
+          const expireTime = expire * 1000;
+          const diff = expireTime - now;
+
+          if (diff <= 0) {
+            return "0";
+          }
+
+          // 计算剩余时间
+          const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+          const hours = Math.floor(
+            (diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+          );
+          const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+          if (days > 0) {
+            return `剩余 ${days} 天 ${hours} 小时`;
+          } else if (hours > 0) {
+            return `剩余 ${hours} 小时 ${minutes} 分钟`;
+          } else if (minutes > 0) {
+            return `剩余 ${minutes} 分钟`;
+          } else {
+            return "0";
+          }
+        }
+
+        formatGB(sub) {
+          // 返回剩余流量，明确在无有效 total 时返回 "0GB"
+          if (!sub || !sub.userinfo) return "0GB";
+
+          const userinfo = sub.userinfo || {};
+
+          // 如果没有 total 或者 total 非正，则直接返回 0GB（不再使用配置作为回退）
+          if (!userinfo.total || userinfo.total <= 0) return "0GB";
+
+          const used = (userinfo.upload || 0) + (userinfo.download || 0);
+          const remaining = (userinfo.total - used) / 1024 / 1024 / 1024;
+
+          if (!isFinite(remaining) || isNaN(remaining) || remaining <= 0)
+            return "0GB";
+
+          return `${Math.round(remaining)}GB`;
+        }
+
+        calculateUsage(userinfo) {
+          // 仅在存在有效 total 时计算使用率，否则返回 0
+          if (!userinfo || !userinfo.total || userinfo.total <= 0) return 0;
+
+          const used = (userinfo.upload || 0) + (userinfo.download || 0);
+          const usage = Math.min(
+            100,
+            Math.round((used / userinfo.total) * 100)
+          );
+          return usage;
         }
 
         renderSubscriptions(subscriptions) {
           const container = document.getElementById("subscriptionsList");
 
-          if (subscriptions.length === 0) {
-            container.innerHTML = '<div class="loading">暂无订阅链接</div>';
+          if (!subscriptions || subscriptions.length === 0) {
+            container.innerHTML =
+              '<div class="no-subscriptions">暂无订阅数据</div>';
             return;
           }
 
-          container.innerHTML = subscriptions
-            .map(
-              (sub) => `
-                    <div class="subscription-item ${
-                      sub.active ? "" : "inactive"
-                    }">
-                        <div class="subscription-header">
-                            <div class="subscription-name">${this.escapeHtml(
-                              sub.name
-                            )}</div>
-                            <div class="subscription-status ${
-                              sub.active ? "status-active" : "status-inactive"
-                            }">
-                                ${sub.active ? "活跃" : "已禁用"}
-                            </div>
-                        </div>
-                        <div class="subscription-url">${this.escapeHtml(
-                          sub.url
-                        )}</div>
-                        ${
-                          sub.description
-                            ? `<div class="subscription-description">${this.escapeHtml(
-                                sub.description
-                              )}</div>`
-                            : ""
-                        }
-                        <div class="subscription-meta">
-                            添加时间：${new Date(sub.created_at).toLocaleString(
-                              "zh-CN"
-                            )}
-                            ${
-                              sub.updated_at !== sub.created_at
-                                ? ` | 更新时间：${new Date(
-                                    sub.updated_at
-                                  ).toLocaleString("zh-CN")}`
-                                : ""
-                            }
-                        </div>
-                        <div class="subscription-actions">
-                            <button class="btn btn-${
-                              sub.active ? "warning" : "success"
-                            } btn-sm" onclick="subscriptionManager.toggleSubscription(${
-                sub.id
-              })">
-                                ${sub.active ? "禁用" : "启用"}
-                            </button>
-                            <button class="btn btn-primary btn-sm" onclick="openEditModal(${
-                              sub.id
-                            }, '${this.escapeJs(sub.name)}', '${this.escapeJs(
-                sub.url
-              )}', '${this.escapeJs(sub.description || "")}')">
-                                编辑
-                            </button>
-                            <button class="btn btn-danger btn-sm" onclick="subscriptionManager.deleteSubscription(${
-                              sub.id
-                            }, '${this.escapeJs(sub.name)}')">
-                                删除
-                            </button>
-                        </div>
-                    </div>
-                `
-            )
+          console.log("Rendering subscriptions:", subscriptions);
+          const html = subscriptions
+            .map((sub) => {
+              console.log("Processing subscription:", sub);
+              // 仅使用接口返回的 userinfo，不再从配置或页面读取 total
+              const userinfo = sub.userinfo || {};
+
+              const usage = this.calculateUsage(userinfo);
+              const usageClass = this.getUsageClass(usage);
+              // 使用分段进度条，显示下载/上传在同一条上的占比与总流量
+              const usageHtml = this.formatUsageBar(
+                userinfo.upload || 0,
+                userinfo.download || 0,
+                userinfo.total
+              );
+              const usageSummary = this.formatUsageSummary(
+                userinfo.upload || 0,
+                userinfo.download || 0,
+                userinfo.total
+              );
+              console.log("Processed values:", {
+                usage,
+                usageClass,
+                usageHtml,
+                usageSummary,
+              });
+
+              return `
+              <div class="subscription-item ${
+                sub.active ? "active" : "inactive"
+              }">
+                <div class="subscription-header">
+                  <div class="subscription-name">${sub.name}</div>
+                  <div class="subscription-status ${
+                    sub.active ? "status-active" : "status-inactive"
+                  }">
+                    ${sub.active ? "活跃" : "已禁用"}
+                  </div>
+                </div>
+                <div class="subscription-url">${sub.url}</div>
+                ${
+                  sub.description
+                    ? `<div class="subscription-description">${sub.description}</div>`
+                    : ""
+                }
+                <div class="subscription-meta">
+                  <div class="subscription-meta-row">
+                    <span class="meta-date">到期时间 ${this.formatExpireTime(
+                      sub.userinfo?.expire
+                    )}</span>
+                    <span class="meta-traffic">剩余流量：${this.formatGB(
+                      sub
+                    )} ${usageSummary}</span>
+                  </div>
+                  <div class="subscription-meta-row">
+                    ${usageHtml}
+                  </div>
+                </div>
+                <div class="subscription-actions">
+                  <button class="btn btn-sm btn-primary" onclick="subscriptionManager.editSubscription('${
+                    sub.id
+                  }')">编辑</button>
+                  <button class="btn btn-sm ${
+                    sub.active ? "btn-warning" : "btn-success"
+                  }" 
+                    onclick="subscriptionManager.toggleSubscription('${
+                      sub.id
+                    }')">
+                    ${sub.active ? "禁用" : "启用"}
+                  </button>
+                  <button class="btn btn-sm btn-danger" onclick="subscriptionManager.deleteSubscription('${
+                    sub.id
+                  }')">删除</button>
+                </div>
+              </div>
+            `;
+            })
             .join("");
+
+          container.innerHTML = html;
         }
 
         updateStats(subscriptions) {
@@ -1207,7 +1487,7 @@
             config.fileName || "";
           document.getElementById("modal-subUpdateTime").value =
             config.subUpdateTime || 6;
-          document.getElementById("modal-total").value = config.total || 99;
+          document.getElementById("modal-total").value = config.total || 0;
           document.getElementById("modal-botToken").value =
             config.botToken || "";
           document.getElementById("modal-chatId").value = config.chatId || "";
@@ -1222,7 +1502,7 @@
             subUpdateTime:
               parseInt(document.getElementById("modal-subUpdateTime").value) ||
               6,
-            total: parseInt(document.getElementById("modal-total").value) || 99,
+            total: parseInt(document.getElementById("modal-total").value) || 0,
             botToken: document.getElementById("modal-botToken").value.trim(),
             chatId: document.getElementById("modal-chatId").value.trim(),
             adminPassword: document
