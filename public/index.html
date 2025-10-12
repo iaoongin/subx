@@ -1274,9 +1274,13 @@
                   </div>
                 </div>
                 <div class="subscription-actions">
-                  <button class="btn btn-sm btn-primary" onclick="subscriptionManager.editSubscription('${
-                    sub.id
-                  }')">编辑</button>
+                 <button class="btn btn-primary btn-sm" onclick="openEditModal(${
+                   sub.id
+                 }, '${this.escapeJs(sub.name)}', '${this.escapeJs(
+                sub.url
+              )}', '${this.escapeJs(sub.description || "")}')">
+                                编辑
+                            </button>
                   <button class="btn btn-sm ${
                     sub.active ? "btn-warning" : "btn-success"
                   }" 
@@ -1383,24 +1387,6 @@
           } catch (error) {
             this.showMessage("删除失败：" + error.message, "error");
           }
-        }
-
-        editSubscription(id, name, url, description) {
-          const newName = prompt("订阅名称:", name);
-          if (newName === null) return;
-
-          const newUrl = prompt("订阅链接:", url);
-          if (newUrl === null) return;
-
-          const newDescription = prompt("描述:", description);
-          if (newDescription === null) return;
-
-          this.updateSubscription(
-            id,
-            newName.trim(),
-            newUrl.trim(),
-            newDescription.trim()
-          );
         }
 
         async updateSubscription(id, name, url, description) {
