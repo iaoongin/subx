@@ -1,3 +1,4 @@
+require('./utils/logger');
 const express = require("express");
 const { Buffer } = require("buffer");
 const path = require("path");
@@ -20,7 +21,7 @@ app.use(
       path: path.join(__dirname, "data", "sessions"),
       ttl: 7 * 24 * 60 * 60, // 7天过期
       reapInterval: 24 * 60 * 60, // 每24小时清理过期session
-      logFn: function () {}, // 禁用日志
+      logFn: function () { }, // 禁用日志
     }),
     secret: "subx-admin-secret-key",
     resave: false,
