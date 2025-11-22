@@ -72,6 +72,7 @@ class Database {
         {
           id: 1,
           name: "示例订阅1",
+          type: "subscription",
           url: "https://example.com/api/v1/client/subscribe?token=YOUR_TOKEN_HERE",
           description: "示例订阅链接1",
           active: 1,
@@ -81,6 +82,7 @@ class Database {
         {
           id: 2,
           name: "示例订阅2",
+          type: "subscription",
           url: "https://example.com/api/v1/client/subscribe?token=YOUR_TOKEN_HERE_2",
           description: "示例订阅链接2",
           active: 1,
@@ -90,6 +92,7 @@ class Database {
         {
           id: 3,
           name: "示例订阅3",
+          type: "subscription",
           url: "https://example.com/share/example/config-id/speed.yaml",
           description: "示例订阅链接3",
           active: 1,
@@ -136,7 +139,7 @@ class Database {
   }
 
   // 添加新的订阅地址
-  addSubscription(name, url, description = "") {
+  addSubscription(name, url, description = "", type = "subscription") {
     return new Promise((resolve, reject) => {
       // 检查URL是否已存在
       const exists = this.data.subscriptions.find((sub) => sub.url === url);
@@ -150,6 +153,7 @@ class Database {
         name,
         url,
         description,
+        type,
         active: 1,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -158,7 +162,7 @@ class Database {
       this.data.subscriptions.push(newSubscription);
 
       if (this.saveData()) {
-        resolve({ id: newSubscription.id, name, url, description });
+        resolve({ id: newSubscription.id, name, url, description, type });
       } else {
         reject(new Error("保存数据失败"));
       }
@@ -166,7 +170,7 @@ class Database {
   }
 
   // 更新订阅地址
-  updateSubscription(id, name, url, description, active = 1) {
+  updateSubscription(id, name, url, description, type = "subscription", active = 1) {
     return new Promise((resolve, reject) => {
       const index = this.data.subscriptions.findIndex((sub) => sub.id == id);
       if (index === -1) {
@@ -188,6 +192,7 @@ class Database {
         name,
         url,
         description,
+        type,
         active,
         updated_at: new Date().toISOString(),
       };

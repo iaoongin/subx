@@ -165,6 +165,11 @@ app.get("/api/subscriptions", async (req, res) => {
     const result = await Promise.all(
       subscriptions.map(async (sub) => {
         let userinfo = { upload: 0, download: 0, total: 0, expire: 0 };
+        // 如果是单节点类型，直接跳过流量查询
+        if (sub.type === 'node') {
+          return { ...sub, userinfo };
+        }
+
         try {
           if (sub.url) {
             const resp = await fetch(sub.url, {
@@ -200,13 +205,13 @@ app.get("/api/subscriptions", async (req, res) => {
 // 添加新订阅
 app.post("/api/subscriptions", async (req, res) => {
   try {
-    const { name, url, description } = req.body;
+    const { name, url, description, type } = req.body;
 
     if (!name || !url) {
       return res.status(400).json({ error: "订阅名称和链接不能为空" });
     }
 
-    const result = await db.addSubscription(name, url, description || "");
+    const result = await db.addSubscription(name, url, description || "", type || "subscription");
     res.json({ message: "订阅添加成功", data: result });
   } catch (error) {
     console.error("添加订阅失败:", error);
@@ -222,7 +227,7 @@ app.post("/api/subscriptions", async (req, res) => {
 app.put("/api/subscriptions/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, url, description, active } = req.body;
+    const { name, url, description, active, type } = req.body;
 
     if (!name || !url) {
       return res.status(400).json({ error: "订阅名称和链接不能为空" });
@@ -233,6 +238,7 @@ app.put("/api/subscriptions/:id", async (req, res) => {
       name,
       url,
       description || "",
+      type || "subscription",
       active !== undefined ? active : 1
     );
 
@@ -453,12 +459,15 @@ app.get("/:path", async (req, res) => {
       } else {
         console.log("从数据库获取到", activeUrls.length, "个活跃订阅");
         订阅转换URL = activeUrls;
+        console.log("订阅转换URL: ", 订阅转换URL);
       }
     } catch (dbError) {
       console.error("数据库查询失败，使用默认数据:", dbError);
       订阅转换URL = await ADD(MainData);
     }
     let 订阅转换URLs = 订阅转换URL.join("|");
+    console.log("订阅转换URLs: ", 订阅转换URLs);
+
     let 编码后的订阅URLs = encodeURIComponent(订阅转换URLs);
 
     let subContent = "";
@@ -470,6 +479,7 @@ app.get("/:path", async (req, res) => {
       subContent = base64Encode(合并内容.trim());
     } else {
       let subConverterUrl = `${subProtocol}://${subConverter}/sub?target=${订阅格式}&url=${编码后的订阅URLs}&emoji=true&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+      console.log("subConverterUrl: ", subConverterUrl);
       const response = await fetch(subConverterUrl, {
         headers: {
           "User-Agent": "Node-fetch",
@@ -496,6 +506,8 @@ async function fetchInBatches(协议列表, 编码后的订阅URLs) {
   // 构造所有请求的 Promise 数组
   const fetchPromises = 协议列表.map(async (协议) => {
     let url = `${subProtocol}://${subConverter}/sub?target=${协议}&url=${编码后的订阅URLs}&emoji=true&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+    console.log("subConverterUrl: ", url);
+
     try {
       const resp = await fetch(url, {
         headers: { "User-Agent": "Node-fetch", Accept: "*/*" },
