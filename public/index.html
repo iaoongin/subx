@@ -286,11 +286,6 @@
       gap: 8px;
     }
 
-    .subscription-name::before {
-      content: "📡";
-      font-size: 1.1rem;
-    }
-
     .subscription-status {
       padding: 6px 12px;
       border-radius: 30px;
@@ -671,20 +666,83 @@
       border: 2px solid #e1e1e1;
       border-radius: 8px;
       font-size: 14px;
-      transition: border-color 0.3s, box-shadow 0.3s;
+      font-weight: 500;
+      color: #333;
+      background-color: #fff;
+      background-image: linear-gradient(135deg, transparent 0%, rgba(102, 126, 234, 0.03) 100%);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       box-sizing: border-box;
+    }
+
+    .modal-form .form-group input:hover,
+    .modal-form .form-group textarea:hover {
+      border-color: #667eea;
+      background-color: #faf9ff;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
     }
 
     .modal-form .form-group input:focus,
     .modal-form .form-group textarea:focus {
       outline: none;
       border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      background-color: #faf9ff;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15), 0 2px 12px rgba(102, 126, 234, 0.2);
     }
 
     .modal-form .form-group textarea {
       height: 80px;
       resize: vertical;
+    }
+
+    /* 自定义 select 下拉框样式 */
+    .modal-form .form-group select {
+      width: 100%;
+      padding: 12px 40px 12px 15px;
+      border: 2px solid #e1e1e1;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #333;
+      background-color: #fff;
+      background-image: linear-gradient(135deg, transparent 0%, rgba(102, 126, 234, 0.03) 100%);
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-sizing: border-box;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      /* 自定义箭头图标 */
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      background-size: 20px;
+      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="%23667eea" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>');
+    }
+
+    .modal-form .form-group select:hover {
+      border-color: #667eea;
+      background-color: #faf9ff;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+    }
+
+    .modal-form .form-group select:focus {
+      outline: none;
+      border-color: #667eea;
+      background-color: #faf9ff;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15), 0 2px 12px rgba(102, 126, 234, 0.2);
+    }
+
+    /* select option 样式 */
+    .modal-form .form-group select option {
+      padding: 12px;
+      font-size: 14px;
+      font-weight: 500;
+      background-color: #fff;
+      color: #333;
+    }
+
+    .modal-form .form-group select option:hover {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
     }
 
     .modal-form .form-grid {
