@@ -40,7 +40,7 @@ class Database {
       if (fs.existsSync(this.dataFile)) {
         const jsonData = fs.readFileSync(this.dataFile, "utf8");
         this.data = JSON.parse(jsonData);
-        console.log("从JSON文件加载数据成功");
+        // console.log("从JSON文件加载数据成功");
       } else {
         console.log("JSON文件不存在，使用默认数据");
         this.createDefaultData();
