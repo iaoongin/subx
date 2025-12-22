@@ -226,16 +226,25 @@
       color: #333;
     }
 
+    #subscriptionsList {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
     .subscription-item {
-      border: none;
-      border-radius: 16px;
-      margin-bottom: 20px;
-      padding: 25px;
+      border: 1px solid #f0f0f0;
+      border-radius: 10px;
+      margin-bottom: 0;
+      padding: 12px;
       background: white;
       transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
       position: relative;
       overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
     }
 
     .subscription-item::before {
@@ -260,25 +269,33 @@
     }
 
     .subscription-item.inactive {
-      opacity: 0.75;
-      background: #f8f9fa;
+      opacity: 0.6;
+      background: #f5f5f5;
+      border-color: #e0e0e0;
+      filter: grayscale(100%);
+    }
+
+    .subscription-item.inactive:hover {
+      transform: none;
+      box-shadow: none;
     }
 
     .subscription-item.inactive::before {
-      background: #cbd5e0;
+      background: #ccc;
+      display: none;
     }
 
     .subscription-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 15px;
-      padding-bottom: 15px;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
       border-bottom: 1px solid #f0f0f0;
     }
 
     .subscription-name {
-      font-size: 1.25rem;
+      font-size: 1rem;
       font-weight: 700;
       color: #2d3748;
       display: flex;
@@ -287,9 +304,9 @@
     }
 
     .subscription-status {
-      padding: 6px 12px;
+      padding: 2px 8px;
       border-radius: 30px;
-      font-size: 0.85rem;
+      font-size: 0.75rem;
       font-weight: 600;
       letter-spacing: 0.3px;
       display: inline-flex;
@@ -320,30 +337,30 @@
     .subscription-url {
       color: #4a5568;
       word-break: break-all;
-      margin: 15px 0;
+      margin: 8px 0;
       font-family: "SF Mono", "Cascadia Code", "Fira Code", monospace;
       background: #f7fafc;
-      padding: 12px;
-      border-radius: 8px;
-      font-size: 0.9rem;
+      padding: 6px;
+      border-radius: 4px;
+      font-size: 0.8rem;
       border: 1px dashed #e2e8f0;
     }
 
     .subscription-description {
       color: #718096;
-      margin: 15px 0;
-      line-height: 1.6;
-      font-size: 0.95rem;
+      margin: 6px 0;
+      line-height: 1.4;
+      font-size: 0.85rem;
     }
 
     .subscription-meta {
       display: flex;
       flex-direction: column;
-      gap: 15px;
-      font-size: 0.9rem;
+      gap: 8px;
+      font-size: 0.8rem;
       color: #718096;
-      margin: 15px 0;
-      padding-top: 15px;
+      margin: 8px 0;
+      padding-top: 8px;
       border-top: 1px solid #f0f0f0;
     }
 
@@ -363,12 +380,13 @@
       font-size: 1.1rem;
     }
 
-    .meta-date::before {
-      content: "🕒";
+    .meta-traffic {
+      flex: 1;
     }
 
-    .meta-traffic::before {
-      content: "📊";
+    .meta-expire {
+      margin-left: auto;
+      text-align: right;
     }
 
     .usage-bar {
@@ -401,8 +419,9 @@
     .subscription-actions {
       display: flex;
       justify-content: flex-end;
-      gap: 8px;
-      margin-top: 20px;
+      gap: 6px;
+      margin-top: auto;
+      padding-top: 8px;
       opacity: 0.8;
       transition: opacity 0.3s ease;
     }
@@ -460,6 +479,18 @@
     .stat-label {
       color: #666;
       margin-top: 5px;
+    }
+
+    @media (max-width: 1200px) {
+      #subscriptionsList {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      #subscriptionsList {
+        grid-template-columns: 1fr;
+      }
     }
 
     @media (max-width: 768px) {
@@ -1155,49 +1186,26 @@
           `;
       }
 
-      formatUsageSummary(upload, download, total) {
-        // 返回文本形式的用量摘要： (↓ xGB ↑ yGB) / totalGB，并在后面追加图标
-        if (!total || total <= 0)
-          // return '(↓ 0GB ↑ 0GB) / 0GB <span class="usage-icon">📉</span>';
-          return `总流量： 0GB `;
-        const up = upload || 0;
-        const down = download || 0;
-        const totalInGB = Math.round(total / 1024 / 1024 / 1024);
-        const downGB = Math.round(down / 1024 / 1024 / 1024);
-        const upGB = Math.round(up / 1024 / 1024 / 1024);
-        // 追加一个小图标放在文本后面
-        return `总流量： ${totalInGB}GB `;
-        // <span class=\"usage-icon\"> ↓ ${downGB}GB ↑ ${upGB}GB</span>`;
+      formatUsageText(upload, download, total) {
+        if (!total || total <= 0) return "0B / 0B";
+
+        const used = (upload || 0) + (download || 0);
+
+        const formatSize = (bytes) => {
+          if (bytes === 0) return '0B';
+          const k = 1024;
+          const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+          const i = Math.floor(Math.log(bytes) / Math.log(k));
+          return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + sizes[i];
+        };
+
+        return `${formatSize(used)} / ${formatSize(total)}`;
       }
 
-      formatExpireTime(expire) {
-        // 如果没有到期时间，返回 0（不显示“永不过期”）
-        if (!expire) return "0";
-
-        const now = Date.now();
-        const expireTime = expire * 1000;
-        const diff = expireTime - now;
-
-        if (diff <= 0) {
-          return "0";
-        }
-
-        // 计算剩余时间
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor(
-          (diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
-        );
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-        if (days > 0) {
-          return `剩余 ${days} 天 ${hours} 小时`;
-        } else if (hours > 0) {
-          return `剩余 ${hours} 小时 ${minutes} 分钟`;
-        } else if (minutes > 0) {
-          return `剩余 ${minutes} 分钟`;
-        } else {
-          return "0";
-        }
+      formatExpireDate(expire) {
+        if (!expire) return "长期有效";
+        const date = new Date(expire * 1000);
+        return date.toISOString().split('T')[0];
       }
 
       formatGB(sub) {
@@ -1254,16 +1262,17 @@
               userinfo.download || 0,
               userinfo.total
             );
-            const usageSummary = this.formatUsageSummary(
+            const usageText = this.formatUsageText(
               userinfo.upload || 0,
               userinfo.download || 0,
               userinfo.total
             );
+
             console.log("Processed values:", {
               usage,
               usageClass,
               usageHtml,
-              usageSummary,
+              usageText,
             });
 
             const isNode = sub.type === 'node';
@@ -1283,27 +1292,28 @@
                     ${sub.active ? "活跃" : "已禁用"}
                   </div>
                 </div>
-                <div class="subscription-url">${sub.url}</div>
+                <div class="subscription-url" title="${sub.url}" style="cursor: pointer;" onclick="subscriptionManager.copyToClipboard('${this.escapeJs(sub.url)}')">
+                  🔗 ${isNode ? this.getProtocol(sub.url) + ' 节点' : this.getDomain(sub.url)}
+                </div>
                 ${sub.description
                 ? `<div class="subscription-description">${sub.description}</div>`
                 : ""
               }
                 ${!isNode ? `
                 <div class="subscription-meta">
-                  <div class="subscription-meta-row">
-                    <span class="meta-date">到期时间 ${this.formatExpireTime(
-                sub.userinfo?.expire
-              )}</span>
-                    <span class="meta-traffic">剩余流量：${this.formatGB(
-                sub
-              )} ${usageSummary}</span>
+                  <div class="subscription-meta-row" style="justify-content: space-between; margin-bottom: 8px;">
+                    <span class="meta-traffic" style="font-size: 0.9em; color: #333;">${usageText}</span>
+                    <span class="meta-expire" style="font-size: 0.9em; color: #666;">${this.formatExpireDate(sub.userinfo?.expire)}</span>
                   </div>
                   <div class="subscription-meta-row">
                     ${usageHtml}
                   </div>
                 </div>` : ''}
                 <div class="subscription-actions">
-                 <button class="btn btn-primary btn-sm" onclick="openEditModal(${sub.id
+                  <button class="btn btn-primary btn-sm" onclick="subscriptionManager.copyToClipboard('${this.escapeJs(sub.url)}')">
+                    复制
+                  </button>
+                  <button class="btn btn-primary btn-sm" onclick="openEditModal(${sub.id
               }, '${this.escapeJs(sub.name)}', '${this.escapeJs(
                 sub.url
               )}', '${this.escapeJs(sub.description || "")}', '${sub.type || "subscription"}')">
@@ -1451,6 +1461,37 @@
 
       escapeJs(text) {
         return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
+      }
+
+      getProtocol(url) {
+        try {
+          const index = url.indexOf("://");
+          if (index > -1) {
+            return url.substring(0, index).toUpperCase();
+          }
+          return "节点";
+        } catch (e) {
+          return "节点";
+        }
+      }
+
+      getDomain(url) {
+        try {
+          const urlObj = new URL(url);
+          return urlObj.hostname;
+        } catch (e) {
+          return url;
+        }
+      }
+
+      async copyToClipboard(text) {
+        try {
+          await navigator.clipboard.writeText(text);
+          this.showMessage("链接已复制到剪贴板", "success");
+        } catch (err) {
+          console.error("Copy failed", err);
+          this.showMessage("复制失败 (请手动复制)", "error");
+        }
       }
     }
 
