@@ -91,14 +91,19 @@ app.listen(port, "0.0.0.0", () => {
 });
 
 // 优雅关闭
+// 优雅关闭
 process.on("SIGINT", () => {
   console.log("\n正在关闭服务器...");
+  const cache = require("./services/cache");
+  cache.clear();
   db.close();
   process.exit(0);
 });
 
 process.on("SIGTERM", () => {
   console.log("\n正在关闭服务器...");
+  const cache = require("./services/cache");
+  cache.clear();
   db.close();
   process.exit(0);
 });

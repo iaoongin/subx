@@ -53,12 +53,31 @@ function getLocalIPAddresses(port) {
         interfaces.forEach((iface) => {
             // 只显示IPv4地址且非内部地址
             if (iface.family === 'IPv4' && !iface.internal) {
-                addresses.push(`http://${iface.address}:${port}`);
+                // 排除链路本地地址 (169.254.x.x)
+                if (!iface.address.startsWith('169.254')) {
+                    addresses.push(iface.address);
+                }
             }
         });
     });
 
-    return addresses;
+    // 优先级排序: 192.168 > 10 > 172 > 其他
+    const getScore = (ip) => {
+        if (ip.startsWith('192.168.')) return 4;
+        if (ip.startsWith('10.')) return 3;
+        if (ip.startsWith('172.')) return 2;
+        return 1;
+    };
+
+    addresses.sort((a, b) => getScore(b) - getScore(a));
+
+    // 如果存在高优先级的常用局域网地址 (192.168.x.x 或 10.x.x.x)，则只显示这些
+    // 这样可以过滤掉 Docker/WSL 等虚拟网卡的地址 (通常是 172.x.x.x) 和其他 VPN 地址
+    const highPriority = addresses.filter(ip => getScore(ip) >= 3);
+
+    const finalAddresses = highPriority.length > 0 ? highPriority : addresses;
+
+    return finalAddresses.map(ip => `http://${ip}:${port}`);
 }
 
 module.exports = {
