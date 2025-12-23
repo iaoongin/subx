@@ -89,7 +89,7 @@ function createSubscriptionRoutes(db) {
                 url,
                 description || "",
                 type || "subscription",
-                active !== undefined ? active : 1
+                active
             );
 
             if (result.changes === 0) {

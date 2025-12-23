@@ -170,7 +170,7 @@ class Database {
   }
 
   // 更新订阅地址
-  updateSubscription(id, name, url, description, type = "subscription", active = 1) {
+  updateSubscription(id, name, url, description, type = "subscription", active) {
     return new Promise((resolve, reject) => {
       const index = this.data.subscriptions.findIndex((sub) => sub.id == id);
       if (index === -1) {
@@ -187,13 +187,15 @@ class Database {
         return;
       }
 
+      const currentSub = this.data.subscriptions[index];
+
       this.data.subscriptions[index] = {
-        ...this.data.subscriptions[index],
+        ...currentSub,
         name,
         url,
         description,
         type,
-        active,
+        active: active !== undefined ? active : currentSub.active,
         updated_at: new Date().toISOString(),
       };
 
