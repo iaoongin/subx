@@ -209,6 +209,29 @@
     </div>
   </div>
 
+  <!-- 通用确认模态框 -->
+  <div id="confirmModal" class="modal">
+    <div class="modal-content" style="max-width: 400px;">
+      <div class="modal-header">
+        <h2 class="modal-title" id="confirmTitle">确认</h2>
+        <button class="close" onclick="closeModal('confirmModal')">
+          &times;
+        </button>
+      </div>
+      <div class="modal-body">
+        <p id="confirmMessage" style="font-size: 15px; color: #555; line-height: 1.6;"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal btn-modal-secondary" onclick="closeModal('confirmModal')">
+          取消
+        </button>
+        <button type="button" class="btn-modal btn-modal-primary" id="confirmBtn">
+          确定
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div id="loadingOverlay" class="loading-overlay">
     <div class="spinner"></div>
     <div class="loading-text">处理中...</div>

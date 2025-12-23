@@ -79,27 +79,29 @@ class SubscriptionManager {
     window.open(url, '_blank');
   }
 
-  async refreshSubscription() {
+  refreshSubscription() {
     if (!this.token) {
       this.showMessage("Token未加载，请稍后再试", "error");
       return;
     }
 
-    if (!confirm("确定要刷新订阅缓存吗？这将强制重新获取所有订阅内容。")) {
-      return;
-    }
-
-    try {
-      const url = `/${this.token}?refresh=true`;
-      const response = await fetch(url);
-      if (response.ok) {
-        this.showMessage("缓存刷新成功！", "success");
-      } else {
-        this.showMessage("刷新失败，状态码：" + response.status, "error");
+    openConfirmModal(
+      "确认刷新",
+      "确定要刷新订阅缓存吗？<br><span style='color: #666; font-size: 13px;'>这将强制重新获取所有订阅内容，可能需要一些时间。</span>",
+      async () => {
+        try {
+          const url = `/${this.token}?refresh=true`;
+          const response = await fetch(url);
+          if (response.ok) {
+            this.showMessage("缓存刷新成功！", "success");
+          } else {
+            this.showMessage("刷新失败，状态码：" + response.status, "error");
+          }
+        } catch (error) {
+          this.showMessage("刷新请求失败：" + error.message, "error");
+        }
       }
-    } catch (error) {
-      this.showMessage("刷新请求失败：" + error.message, "error");
-    }
+    );
   }
 
   async loadSubscriptions() {
@@ -319,7 +321,7 @@ class SubscriptionManager {
                 ${sub.active ? "禁用" : "启用"}
               </button>
               <button class="btn btn-sm btn-danger" onclick="subscriptionManager.deleteSubscription('${sub.id
-          }')">删除</button>
+          }', '${this.escapeJs(sub.name)}')">删除</button>
             </div>
           </div>
         `;
@@ -385,27 +387,29 @@ class SubscriptionManager {
     }
   }
 
-  async deleteSubscription(id, name) {
-    if (!confirm(`确定要删除订阅 "${name}" 吗？此操作无法撤销。`)) {
-      return;
-    }
+  deleteSubscription(id, name) {
+    openConfirmModal(
+      "确认删除",
+      `确定要删除订阅 "${name}" 吗？此操作无法撤销。`,
+      async () => {
+        try {
+          const response = await fetch(`/api/subscriptions/${id}`, {
+            method: "DELETE",
+          });
 
-    try {
-      const response = await fetch(`/api/subscriptions/${id}`, {
-        method: "DELETE",
-      });
+          const result = await response.json();
 
-      const result = await response.json();
-
-      if (response.ok) {
-        this.showMessage("订阅删除成功！", "success");
-        this.loadSubscriptions();
-      } else {
-        this.showMessage("删除失败：" + result.error, "error");
+          if (response.ok) {
+            this.showMessage("订阅删除成功！", "success");
+            this.loadSubscriptions();
+          } else {
+            this.showMessage("删除失败：" + result.error, "error");
+          }
+        } catch (error) {
+          this.showMessage("删除失败：" + error.message, "error");
+        }
       }
-    } catch (error) {
-      this.showMessage("删除失败：" + error.message, "error");
-    }
+    );
   }
 
   async updateSubscription(id, name, url, description, type) {
@@ -567,27 +571,29 @@ class ConfigManager {
     }
   }
 
-  async resetConfig() {
-    if (!confirm("确定要重置配置为默认值吗？")) {
-      return;
-    }
+  resetConfig() {
+    openConfirmModal(
+      "确认重置",
+      "确定要重置配置为默认值吗？",
+      async () => {
+        try {
+          const response = await fetch("/api/config/reset", {
+            method: "POST",
+          });
 
-    try {
-      const response = await fetch("/api/config/reset", {
-        method: "POST",
-      });
+          const result = await response.json();
 
-      const result = await response.json();
-
-      if (response.ok) {
-        this.showMessage("配置重置成功！", "success");
-        this.populateForm(result.config);
-      } else {
-        this.showMessage("重置失败：" + result.error, "error");
+          if (response.ok) {
+            this.showMessage("配置重置成功！", "success");
+            this.populateForm(result.config);
+          } else {
+            this.showMessage("重置失败：" + result.error, "error");
+          }
+        } catch (error) {
+          this.showMessage("重置失败：" + error.message, "error");
+        }
       }
-    } catch (error) {
-      this.showMessage("重置失败：" + error.message, "error");
-    }
+    );
   }
 
   showMessage(message, type) {
@@ -620,26 +626,29 @@ async function checkAuthStatus() {
 }
 
 // 登出功能
-async function logout() {
-  if (!confirm("确定要登出吗？")) {
-    return;
-  }
+// 登出功能
+function logout() {
+  openConfirmModal(
+    "确认登出",
+    "确定要登出吗？",
+    async () => {
+      try {
+        const response = await fetch("/api/auth/logout", {
+          method: "POST",
+        });
 
-  try {
-    const response = await fetch("/api/auth/logout", {
-      method: "POST",
-    });
-
-    if (response.ok) {
-      window.location.href = "/login";
-    } else {
-      alert("登出失败，请重试");
+        if (response.ok) {
+          window.location.href = "/login";
+        } else {
+          createGlobalToast("登出失败，请重试", "error");
+        }
+      } catch (error) {
+        console.error("登出失败:", error);
+        // 即使登出失败，也跳转到登录页面
+        window.location.href = "/login";
+      }
     }
-  } catch (error) {
-    console.error("登出失败:", error);
-    // 即使登出失败，也跳转到登录页面
-    window.location.href = "/login";
-  }
+  );
 }
 
 // 定期检查会话状态（每5分钟检查一次）
@@ -651,6 +660,28 @@ checkAuthStatus();
 // 全局模态框控制函数
 function openModal(modalId) {
   document.getElementById(modalId).style.display = "block";
+}
+
+function closeModal(modalId) {
+  document.getElementById(modalId).style.display = "none";
+}
+
+// 通用确认模态框函数
+function openConfirmModal(title, message, onConfirm) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmMessage').innerHTML = message;
+
+  const confirmBtn = document.getElementById('confirmBtn');
+  // 克隆按钮以移除旧的事件监听器
+  const newBtn = confirmBtn.cloneNode(true);
+  confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+
+  newBtn.addEventListener('click', () => {
+    closeModal('confirmModal');
+    if (onConfirm) onConfirm();
+  });
+
+  openModal('confirmModal');
 }
 
 function closeModal(modalId) {
