@@ -437,13 +437,7 @@ class SubscriptionManager {
   }
 
   showMessage(message, type) {
-    const messageDiv = document.getElementById("message");
-    messageDiv.innerHTML = `<div class="message ${type}">${this.escapeHtml(
-      message
-    )}</div>`;
-    setTimeout(() => {
-      messageDiv.innerHTML = "";
-    }, 5000);
+    createGlobalToast(message, type);
   }
 
   escapeHtml(text) {
@@ -597,13 +591,7 @@ class ConfigManager {
   }
 
   showMessage(message, type) {
-    const messageDiv = document.getElementById("message");
-    messageDiv.innerHTML = `<div class="message ${type}">${this.escapeHtml(
-      message
-    )}</div>`;
-    setTimeout(() => {
-      messageDiv.innerHTML = "";
-    }, 5000);
+    createGlobalToast(message, type);
   }
 
   escapeHtml(text) {
@@ -737,3 +725,54 @@ document
 
 // 移除点击模态框外部关闭功能，确保只能通过按钮关闭弹窗
 // 这样可以避免用户在编辑时意外关闭弹窗
+
+/* Toast Notification Logic */
+function createGlobalToast(message, type = 'info') {
+  let container = document.querySelector('.toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+
+  // Icon map
+  const icons = {
+    success: '✓',
+    error: '✕',
+    info: 'ℹ',
+    warning: '!'
+  };
+
+  // Safely escape HTML
+  const escapeHtml = (text) => {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  };
+
+  toast.innerHTML = `
+        <div class="toast-icon">${icons[type] || icons.info}</div>
+        <div class="toast-content">${escapeHtml(message)}</div>
+        <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+    `;
+
+  container.appendChild(toast);
+
+  // Trigger animation
+  requestAnimationFrame(() => {
+    toast.classList.add('show');
+  });
+
+  // Auto remove
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => {
+      if (toast.parentElement) {
+        toast.remove();
+      }
+    }, 400); // Wait for transition
+  }, 5000);
+}
