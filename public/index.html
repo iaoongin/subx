@@ -47,9 +47,17 @@
     <div class="subscriptions-section">
       <div class="section-header">
         <h2>📋 订阅列表</h2>
-        <button class="section-action-btn" onclick="openAddModal()">
-          ➕ 添加订阅
-        </button>
+        <div style="display: flex; gap: 10px;">
+          <button class="section-action-btn" onclick="subscriptionManager.previewSubscription()">
+            👀 预览订阅
+          </button>
+          <button class="section-action-btn" onclick="subscriptionManager.refreshSubscription()">
+            🔄 刷新缓存
+          </button>
+          <button class="section-action-btn" onclick="openAddModal()">
+            ➕ 添加订阅
+          </button>
+        </div>
       </div>
       <div id="subscriptionsList">
         <div class="loading">正在加载订阅列表...</div>

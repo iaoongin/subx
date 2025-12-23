@@ -37,11 +37,13 @@ class SubscriptionManager {
   constructor() {
     this.apiBase = "";
     this.subscriptions = [];
+    this.token = null;
     this.init();
   }
 
   async init() {
     try {
+      await this.loadConfig();
       await this.loadSubscriptions();
       this.bindEvents();
     } catch (error) {
@@ -56,6 +58,48 @@ class SubscriptionManager {
         e.preventDefault();
         this.addSubscription();
       });
+  }
+
+  async loadConfig() {
+    try {
+      const response = await fetch("/api/config");
+      const config = await response.json();
+      this.token = config.token;
+    } catch (error) {
+      console.error("Failed to load config:", error);
+    }
+  }
+
+  previewSubscription() {
+    if (!this.token) {
+      this.showMessage("Token未加载，请稍后再试", "error");
+      return;
+    }
+    const url = `/${this.token}`;
+    window.open(url, '_blank');
+  }
+
+  async refreshSubscription() {
+    if (!this.token) {
+      this.showMessage("Token未加载，请稍后再试", "error");
+      return;
+    }
+
+    if (!confirm("确定要刷新订阅缓存吗？这将强制重新获取所有订阅内容。")) {
+      return;
+    }
+
+    try {
+      const url = `/${this.token}?refresh=true`;
+      const response = await fetch(url);
+      if (response.ok) {
+        this.showMessage("缓存刷新成功！", "success");
+      } else {
+        this.showMessage("刷新失败，状态码：" + response.status, "error");
+      }
+    } catch (error) {
+      this.showMessage("刷新请求失败：" + error.message, "error");
+    }
   }
 
   async loadSubscriptions() {
