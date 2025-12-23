@@ -23,7 +23,7 @@ function createSubscriptionRoutes(db) {
                     try {
                         if (sub.url) {
                             const resp = await fetch(sub.url, {
-                                headers: { "User-Agent": "Clash" },
+                                headers: { "User-Agent": "Clash Verge" },
                             });
                             if (resp.ok) {
                                 // 从响应头获取 subscription-userinfo
