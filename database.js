@@ -18,6 +18,11 @@ class Database {
         total: 99,
         timestamp: 4102329600000,
         adminPassword: "",
+        conversionMode: "remote",
+        fallbackEnabled: true,
+        nativeConverterEnabled: true,
+        remoteConverterUrl: "https://subc.00321.xyz",
+        remoteConverterProtocol: "https",
       },
     };
     this.init();
@@ -40,6 +45,8 @@ class Database {
       if (fs.existsSync(this.dataFile)) {
         const jsonData = fs.readFileSync(this.dataFile, "utf8");
         this.data = JSON.parse(jsonData);
+        // 配置迁移：添加新配置项的默认值
+        this.migrateConfig();
         // console.log("从JSON文件加载数据成功");
       } else {
         console.log("JSON文件不存在，使用默认数据");
@@ -48,6 +55,29 @@ class Database {
     } catch (error) {
       console.error("加载JSON数据失败:", error.message);
       this.createDefaultData();
+    }
+  }
+
+  migrateConfig() {
+    let needsSave = false;
+    const defaultConversionConfig = {
+      conversionMode: "remote",
+      fallbackEnabled: true,
+      nativeConverterEnabled: true,
+      remoteConverterUrl: "https://subc.00321.xyz",
+      remoteConverterProtocol: "https",
+    };
+
+    for (const [key, defaultValue] of Object.entries(defaultConversionConfig)) {
+      if (this.data.config[key] === undefined) {
+        this.data.config[key] = defaultValue;
+        needsSave = true;
+        console.log(`配置迁移: 添加 ${key} = ${defaultValue}`);
+      }
+    }
+
+    if (needsSave) {
+      this.saveData();
     }
   }
 
@@ -111,6 +141,11 @@ class Database {
         total: 99,
         timestamp: 4102329600000,
         adminPassword: "admin123",
+        conversionMode: "remote",
+        fallbackEnabled: true,
+        nativeConverterEnabled: true,
+        remoteConverterUrl: "https://subc.00321.xyz",
+        remoteConverterProtocol: "https",
       },
     };
     this.saveData();
@@ -329,6 +364,11 @@ class Database {
           total: 99,
           timestamp: 4102329600000,
           adminPassword: "",
+          conversionMode: "remote",
+          fallbackEnabled: true,
+          nativeConverterEnabled: true,
+          remoteConverterUrl: "https://subc.00321.xyz",
+          remoteConverterProtocol: "https",
         };
 
         if (this.saveData()) {

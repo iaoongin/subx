@@ -23,21 +23,22 @@ function createConversionRoutes(db) {
      * @param {string} cacheKey - 缓存key
      * @param {string} token - 用户token
      * @param {string} format - 订阅格式
+     * @param {string} mode - 转换模式
      * @param {number} ttl - 缓存有效期（小时）
      */
-    async function refreshInBackground(cacheKey, token, format, ttl) {
+    async function refreshInBackground(cacheKey, token, format, mode, ttl) {
         try {
             console.log(`后台刷新缓存: ${cacheKey}`);
             cache.markRefreshing(cacheKey, true);
 
             // 执行订阅转换
-            const content = await fetchSubscriptionContent(token, format);
+            const content = await fetchSubscriptionContent(token, format, mode);
 
             // 更新缓存
             cache.set(cacheKey, content, format, ttl);
             console.log(`后台刷新完成: ${cacheKey}`);
         } catch (error) {
-            console.error(`后台刷新失败: ${cacheKey}`, error.message);
+            console.error(`后台刷新失败: ${cacheKey}`, error);
         } finally {
             cache.markRefreshing(cacheKey, false);
         }
@@ -47,29 +48,91 @@ function createConversionRoutes(db) {
      * 获取订阅内容
      * @param {string} token - 用户token
      * @param {string} format - 订阅格式
+     * @param {string} mode - 转换模式
      * @returns {Promise<string>} 订阅内容
      */
-    async function fetchSubscriptionContent(token, format) {
-        // 从数据库获取活跃的订阅地址
-        let 订阅转换URL;
+    async function fetchSubscriptionContent(token, format, mode) {
+        const conversionStart = Date.now();
+        const maskedToken = token ? `${token.slice(0, 4)}***` : "empty";
+        console.log(
+            `[conversion-start] token=${maskedToken}, format=${format}, mode=${mode || "auto"}`
+        );
+
+        // 从数据库获取活跃的订阅地址和配置
+        let activeUrls;
+        let config;
+
         try {
-            const activeUrls = await db.getActiveSubscriptionUrls();
+            activeUrls = await db.getActiveSubscriptionUrls();
+            config = await db.getConfig();
+
             if (activeUrls.length === 0) {
                 console.log("数据库中没有活跃订阅，使用默认数据");
-                订阅转换URL = await ADD(MainData);
+                activeUrls = await ADD(MainData);
             } else {
                 console.log("从数据库获取到", activeUrls.length, "个活跃订阅");
-                订阅转换URL = activeUrls;
             }
         } catch (dbError) {
             console.error("数据库查询失败，使用默认数据:", dbError);
-            订阅转换URL = await ADD(MainData);
+            activeUrls = await ADD(MainData);
+            config = {
+                conversionMode: 'remote',
+                fallbackEnabled: true,
+                nativeConverterEnabled: true
+            };
         }
 
-        let 订阅转换URLs = 订阅转换URL.join("|");
+        // 确定转换模式：URL参数 > 环境变量 > 配置 > 默认值
+        const conversionMode = mode ||
+                               process.env.CONVERSION_MODE ||
+                               config.conversionMode ||
+                               'remote';
+
+        console.log(`转换模式: ${conversionMode}`);
+
+        let subContent;
+
+        // 原生转换
+        if (conversionMode === 'native' && config.nativeConverterEnabled) {
+            try {
+                console.log('使用原生转换器');
+                const NativeConverter = require('../services/native');
+                const converter = new NativeConverter();
+                subContent = await converter.convert(activeUrls, format);
+            } catch (error) {
+                console.error('原生转换失败:', error);
+
+                // 降级到远程转换
+                if (config.fallbackEnabled) {
+                    console.warn('降级到远程转换器（fallbackEnabled=true）');
+                    subContent = await convertWithRemote(activeUrls, format, config);
+                } else {
+                    throw error;
+                }
+            }
+        } else {
+            // 远程转换
+            subContent = await convertWithRemote(activeUrls, format, config);
+        }
+
+        const durationMs = Date.now() - conversionStart;
+        console.log(
+            `[conversion-end] format=${format}, mode=${conversionMode}, durationMs=${durationMs}`
+        );
+        return subContent;
+    }
+
+    /**
+     * 使用远程转换器转换订阅
+     * @param {Array<string>} subscriptionUrls - 订阅URL列表
+     * @param {string} format - 订阅格式
+     * @param {object} config - 配置对象
+     * @returns {Promise<string>} 订阅内容
+     */
+    async function convertWithRemote(subscriptionUrls, format, config) {
+        let 订阅转换URLs = subscriptionUrls.join("|");
         let 编码后的订阅URLs = encodeURIComponent(订阅转换URLs);
 
-        let subContent = "";
         const { subProtocol, subConverter } = getConverterConfig();
 
         if (format === "ss") {
@@ -77,7 +140,7 @@ function createConversionRoutes(db) {
             const 协议列表 = ["ss", "ssr", "v2ray", "trojan"];
             let 合并内容 = await fetchInBatches(协议列表, 编码后的订阅URLs);
             // 最终 Base64 编码
-            subContent = base64Encode(合并内容.trim());
+            return base64Encode(合并内容.trim());
         } else {
             let subConverterUrl = `${subProtocol}://${subConverter}/sub?target=${format}&url=${编码后的订阅URLs}&emoji=true&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
             console.log("subConverterUrl: ", subConverterUrl);
@@ -88,17 +151,23 @@ function createConversionRoutes(db) {
                 },
                 redirect: "manual",
             });
-            subContent = await response.text();
+            return await response.text();
         }
-
-        return subContent;
     }
 
     router.get("/:path", async (req, res) => {
+        const requestStart = Date.now();
+        const requestId = `${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 8)}`;
+
         try {
             const token = req.query.token || "";
             const pathToken = req.params.path;
             const forceRefresh = req.query.refresh === 'true';
+            const mode = req.query.mode; // 获取转换模式参数
+
+            console.log(
+                `[request-start][${requestId}] path=${req.params.path}, refresh=${forceRefresh}, mode=${mode || "auto"}`
+            );
 
             // 从数据库动态获取配置
             const config = await db.getConfig();
@@ -118,12 +187,18 @@ function createConversionRoutes(db) {
             const userAgentHeader = (req.headers["user-agent"] || "").toLowerCase();
             const 订阅格式 = detectSubscriptionFormat(userAgentHeader, req.query);
 
-            // 生成缓存key
-            const cacheKey = cache.generateKey(currentToken, 订阅格式);
+            // 生成缓存key（包含mode参数）
+            const cacheKey = cache.generateKey(currentToken, 订阅格式, mode);
+            console.log(`生成缓存Key: ${cacheKey} (token=${currentToken}, format=${订阅格式}, mode=${mode})`);
+
+            // 打印缓存统计
+            const stats = cache.getStats();
+            console.log(`当前缓存状态: 总数=${stats.size}, keys=${stats.keys.join(', ')}`);
 
             // 如果不是强制刷新，尝试从缓存获取
             if (!forceRefresh) {
                 const cached = cache.get(cacheKey);
+                console.log(`缓存查询结果: ${cached ? '命中' : '未命中'}`);
                 if (cached) {
                     const isValid = cache.isValid(cached);
                     const cacheAge = cache.getCacheAge(cached);
@@ -138,11 +213,14 @@ function createConversionRoutes(db) {
                         "X-Cache-Age": cacheAge.toString(),
                     });
                     res.send(cached.content);
+                    console.log(
+                        `[request-end][${requestId}] source=cache, cache=${isValid ? "HIT" : "STALE"}, durationMs=${Date.now() - requestStart}`
+                    );
 
                     // 如果缓存过期且未在刷新中，后台异步刷新
                     if (!isValid && !cached.refreshing) {
                         // 异步刷新，不阻塞响应
-                        refreshInBackground(cacheKey, currentToken, 订阅格式, currentSUBUpdateTime);
+                        refreshInBackground(cacheKey, currentToken, 订阅格式, mode, currentSUBUpdateTime);
                     }
 
                     return;
@@ -157,7 +235,7 @@ function createConversionRoutes(db) {
                 console.log(`缓存未命中: ${cacheKey}`);
             }
 
-            const subContent = await fetchSubscriptionContent(currentToken, 订阅格式);
+            const subContent = await fetchSubscriptionContent(currentToken, 订阅格式, mode);
 
             // 更新缓存
             cache.set(cacheKey, subContent, 订阅格式, currentSUBUpdateTime);
@@ -172,8 +250,11 @@ function createConversionRoutes(db) {
             console.log("Headers set:", res.getHeaders());
 
             res.send(subContent);
+            console.log(
+                `[request-end][${requestId}] source=upstream, cache=${forceRefresh ? "REFRESH" : "MISS"}, durationMs=${Date.now() - requestStart}`
+            );
         } catch (error) {
-            console.error("错误:", error);
+            console.error(`[request-failed][${requestId}]`, error);
             res.status(500).send("服务器内部错误");
         }
     });

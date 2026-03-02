@@ -18,6 +18,9 @@ data/config.json
 # Session files - contains user sessions
 data/sessions/
 
+# cache files
+data/cache/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
