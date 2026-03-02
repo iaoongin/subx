@@ -67,10 +67,11 @@ class SubscriptionCache {
      * @param {string} token - 用户token
      * @param {string} format - 订阅格式
      * @param {string} mode - 转换模式 (remote/native)
+     * @param {string} extensionKey - 扩展脚本指纹
      * @returns {string} 缓存key
      */
-    generateKey(token, format, mode = 'remote') {
-        return `sub_cache:${token}:${format}:${mode}`;
+    generateKey(token, format, mode = 'remote', extensionKey = 'default') {
+        return `sub_cache:${token}:${format}:${mode}:${extensionKey}`;
     }
 
     /**

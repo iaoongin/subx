@@ -1,11 +1,13 @@
 const express = require("express");
 const router = express.Router();
+const crypto = require("crypto");
 const {
     detectSubscriptionFormat,
     ADD,
     fetchInBatches,
     getConverterConfig,
 } = require("../services/converter");
+const { applyExtensionScriptToContent, getExtensionScript, normalizeScript } = require("../services/extension-script");
 const { base64Encode } = require("../utils/encoding");
 const cache = require("../services/cache");
 
@@ -78,7 +80,8 @@ function createConversionRoutes(db) {
             config = {
                 conversionMode: 'remote',
                 fallbackEnabled: true,
-                nativeConverterEnabled: true
+                nativeConverterEnabled: true,
+                fileName: "SubX",
             };
         }
 
@@ -89,6 +92,7 @@ function createConversionRoutes(db) {
                                'remote';
 
         console.log(`转换模式: ${conversionMode}`);
+        const extensionScript = getExtensionScript();
 
         let subContent;
 
@@ -114,6 +118,13 @@ function createConversionRoutes(db) {
             // 远程转换
             subContent = await convertWithRemote(activeUrls, format, config);
         }
+
+        subContent = applyExtensionScriptToContent(
+            extensionScript,
+            subContent,
+            format,
+            config.fileName || "SubX",
+        );
 
         const durationMs = Date.now() - conversionStart;
         console.log(
@@ -186,10 +197,16 @@ function createConversionRoutes(db) {
 
             const userAgentHeader = (req.headers["user-agent"] || "").toLowerCase();
             const 订阅格式 = detectSubscriptionFormat(userAgentHeader, req.query);
+            const extensionScript = getExtensionScript();
+            const extensionScriptHash = crypto
+                .createHash("sha1")
+                .update(normalizeScript(extensionScript))
+                .digest("hex")
+                .slice(0, 12);
 
             // 生成缓存key（包含mode参数）
-            const cacheKey = cache.generateKey(currentToken, 订阅格式, mode);
-            console.log(`生成缓存Key: ${cacheKey} (token=${currentToken}, format=${订阅格式}, mode=${mode})`);
+            const cacheKey = cache.generateKey(currentToken, 订阅格式, mode, extensionScriptHash);
+            console.log(`生成缓存Key: ${cacheKey} (token=${currentToken}, format=${订阅格式}, mode=${mode}, script=${extensionScriptHash})`);
 
             // 打印缓存统计
             const stats = cache.getStats();

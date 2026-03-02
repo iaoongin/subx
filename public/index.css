@@ -618,6 +618,17 @@
         animation: modalSlideIn 0.3s ease-out;
     }
 
+    #configModal .modal-content {
+        max-width: 900px;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+    }
+
+    #configModal .modal-body {
+        overflow-y: auto;
+    }
+
     @keyframes modalSlideIn {
         from {
             opacity: 0;
@@ -772,6 +783,36 @@
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
         gap: 20px;
+    }
+
+    .modal-form .form-grid .full-width {
+        grid-column: 1 / -1;
+    }
+
+    .form-help {
+        margin-top: 8px;
+        color: #6b7280;
+        font-size: 12px;
+    }
+
+    .code-editor-ace {
+        border: 2px solid #e1e1e1;
+        border-radius: 8px;
+        overflow: hidden;
+        height: 360px;
+        max-height: 55vh;
+    }
+
+    .code-editor-ace:hover {
+        border-color: #667eea;
+    }
+
+    .code-editor-ace .ace_gutter {
+        background: #0b1220 !important;
+    }
+
+    .code-editor-ace .ace_scroller {
+        background: #0f172a !important;
     }
 
     .modal-footer {

@@ -105,6 +105,11 @@
               <label for="modal-adminPassword">管理员密码</label>
               <input type="password" id="modal-adminPassword" required />
             </div>
+            <div class="form-group full-width">
+              <label for="modal-extensionScriptEditor">扩展脚本（整合订阅）</label>
+              <div id="modal-extensionScriptEditor" class="code-editor-ace"></div>
+              <div class="form-help">脚本必须定义: <code>main(config, profileName)</code></div>
+            </div>
           </div>
         </form>
       </div>
@@ -237,6 +242,7 @@
     <div class="loading-text">处理中...</div>
   </div>
 
+  <script src="/vendor/ace/ace.js"></script>
   <script src="index.js"></script>
 </body>
 

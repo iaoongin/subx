@@ -33,6 +33,49 @@ window.fetch = async function (...args) {
   }
 };
 
+const DEFAULT_EXTENSION_SCRIPT = `function main(config, profileName) {
+  let content = JSON.parse(JSON.stringify(config));
+  return content;
+}
+`;
+
+class AceScriptEditor {
+  constructor(editorId) {
+    this.editor = null;
+    this.editorId = editorId;
+    this.container = document.getElementById(editorId);
+
+    if (!this.container || typeof ace === "undefined") {
+      return;
+    }
+
+    this.editor = ace.edit(editorId);
+    this.editor.setTheme("ace/theme/monokai");
+    this.editor.session.setMode("ace/mode/javascript");
+    this.editor.session.setUseWrapMode(true);
+    this.editor.session.setUseWorker(false);
+    this.editor.setShowPrintMargin(false);
+    this.editor.setOptions({
+      fontSize: "13px",
+      tabSize: 2,
+      useSoftTabs: true,
+      highlightActiveLine: true,
+      behavioursEnabled: true,
+    });
+    this.editor.setValue(DEFAULT_EXTENSION_SCRIPT, -1);
+  }
+
+  setValue(value) {
+    if (!this.editor) return;
+    this.editor.setValue(value || DEFAULT_EXTENSION_SCRIPT, -1);
+  }
+
+  getValue() {
+    if (!this.editor) return DEFAULT_EXTENSION_SCRIPT;
+    return this.editor.getValue();
+  }
+}
+
 class SubscriptionManager {
   constructor() {
     this.apiBase = "";
@@ -488,6 +531,7 @@ class SubscriptionManager {
 
 class ConfigManager {
   constructor() {
+    this.extensionScriptEditor = new AceScriptEditor("modal-extensionScriptEditor");
     this.init();
   }
 
@@ -507,15 +551,27 @@ class ConfigManager {
 
   async loadConfig() {
     try {
-      const response = await fetch("/api/config");
-      const config = await response.json();
-      this.populateForm(config);
+      const [configResponse, scriptResponse] = await Promise.all([
+        fetch("/api/config"),
+        fetch("/api/extension-script"),
+      ]);
+
+      if (!configResponse.ok) {
+        throw new Error("加载系统配置失败");
+      }
+      if (!scriptResponse.ok) {
+        throw new Error("加载扩展脚本失败");
+      }
+
+      const config = await configResponse.json();
+      const scriptResult = await scriptResponse.json();
+      this.populateForm(config, scriptResult.script);
     } catch (error) {
       this.showMessage("加载配置失败：" + error.message, "error");
     }
   }
 
-  populateForm(config) {
+  populateForm(config, extensionScript = DEFAULT_EXTENSION_SCRIPT) {
     document.getElementById("modal-token").value = config.token || "";
     document.getElementById("modal-fileName").value =
       config.fileName || "";
@@ -527,6 +583,7 @@ class ConfigManager {
     document.getElementById("modal-chatId").value = config.chatId || "";
     document.getElementById("modal-adminPassword").value =
       config.adminPassword || "";
+    this.extensionScriptEditor.setValue(extensionScript || DEFAULT_EXTENSION_SCRIPT);
   }
 
   async saveConfig() {
@@ -550,21 +607,33 @@ class ConfigManager {
     }
 
     try {
-      const response = await fetch("/api/config", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(config),
-      });
+      const extensionScript = this.extensionScriptEditor.getValue();
+      const [configResponse, scriptResponse] = await Promise.all([
+        fetch("/api/config", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(config),
+        }),
+        fetch("/api/extension-script", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ script: extensionScript }),
+        }),
+      ]);
 
-      const result = await response.json();
+      const configResult = await configResponse.json();
+      const scriptResult = await scriptResponse.json();
 
-      if (response.ok) {
+      if (configResponse.ok && scriptResponse.ok) {
         this.showMessage("配置保存成功！", "success");
         closeModal("configModal");
       } else {
-        this.showMessage("保存失败：" + result.error, "error");
+        const errorMsg = configResult.error || scriptResult.error || "保存失败";
+        this.showMessage("保存失败：" + errorMsg, "error");
       }
     } catch (error) {
       this.showMessage("保存失败：" + error.message, "error");
@@ -585,7 +654,7 @@ class ConfigManager {
 
           if (response.ok) {
             this.showMessage("配置重置成功！", "success");
-            this.populateForm(result.config);
+            this.populateForm(result.config, this.extensionScriptEditor.getValue());
           } else {
             this.showMessage("重置失败：" + result.error, "error");
           }

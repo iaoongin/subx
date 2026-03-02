@@ -21,6 +21,10 @@ const db = new Database();
 // 中间件
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
+app.use(
+  "/vendor/ace",
+  express.static(path.join(__dirname, "node_modules", "ace-builds", "src-min-noconflict"))
+);
 
 // Session 配置 - 使用文件存储实现持久化
 app.use(

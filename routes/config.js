@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { getExtensionScript, saveExtensionScript } = require("../services/extension-script");
 
 /**
  * 创建配置管理相关路由
@@ -63,6 +64,29 @@ function createConfigRoutes(db) {
         } catch (error) {
             console.error("重置配置失败:", error);
             res.status(500).json({ error: "重置配置失败" });
+        }
+    });
+
+    // 获取扩展脚本（单独文件持久化）
+    router.get("/api/extension-script", async (req, res) => {
+        try {
+            const script = getExtensionScript();
+            res.json({ script });
+        } catch (error) {
+            console.error("获取扩展脚本失败:", error);
+            res.status(500).json({ error: "获取扩展脚本失败" });
+        }
+    });
+
+    // 更新扩展脚本（单独文件持久化）
+    router.put("/api/extension-script", async (req, res) => {
+        try {
+            const { script } = req.body;
+            const savedScript = saveExtensionScript(script);
+            res.json({ message: "扩展脚本更新成功", script: savedScript });
+        } catch (error) {
+            console.error("更新扩展脚本失败:", error);
+            res.status(500).json({ error: "更新扩展脚本失败" });
         }
     });
 

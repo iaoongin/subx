@@ -14,6 +14,7 @@ dist-ssr
 
 # Config file - contains sensitive configuration and user data
 data/config.json
+data/extension-script.js
 
 # Session files - contains user sessions
 data/sessions/
