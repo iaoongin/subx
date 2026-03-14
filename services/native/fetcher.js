@@ -32,6 +32,19 @@ class SubscriptionFetcher {
     async fetch(url) {
         const result = { url, nodes: [], failures: [], format: null, success: false, error: null, attempts: [] };
         try {
+            // 直接节点链接（非 http/https）无需拉取，直接解析
+            const isDirectNode =
+                /^(vmess|vless|ss|trojan|hysteria2):\/\//i.test(url) &&
+                !/^https?:\/\//i.test(url);
+            if (isDirectNode) {
+                result.format = "uri";
+                const parsed = this.parseSubscription(url, result.format);
+                result.nodes = parsed.nodes || [];
+                result.failures = parsed.failures || [];
+                result.success = true;
+                return result;
+            }
+
             const { response, attempts } = await this.fetchWithRetry(url, 3);
             result.attempts = attempts;
             const content = await response.text();

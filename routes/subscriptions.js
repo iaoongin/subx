@@ -15,8 +15,8 @@ function createSubscriptionRoutes(db) {
             const result = await Promise.all(
                 subscriptions.map(async (sub) => {
                     let userinfo = { upload: 0, download: 0, total: 0, expire: 0 };
-                    // 如果是单节点类型，直接跳过流量查询
-                    if (sub.type === 'node') {
+                    // 如果是单节点/节点列表类型，直接跳过流量查询
+                    if (sub.type === 'node' || sub.type === 'list') {
                         return { ...sub, userinfo };
                     }
 

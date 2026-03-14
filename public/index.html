@@ -142,7 +142,7 @@
             <label for="modal-type">类型 *</label>
             <select id="modal-type" required>
               <option value="subscription">订阅链接</option>
-              <option value="node">单节点</option>
+              <option value="list">节点列表</option>
             </select>
           </div>
           <div class="form-group">
@@ -151,7 +151,8 @@
           </div>
           <div class="form-group">
             <label for="modal-url">订阅链接 *</label>
-            <input type="url" id="modal-url" required placeholder="https://example.com/subscribe" />
+            <textarea id="modal-url" required rows="3" placeholder="https://example.com/subscribe"></textarea>
+            <div id="modal-url-help" class="form-help">仅支持单条订阅链接</div>
           </div>
           <div class="form-group">
             <label for="modal-description">描述</label>
@@ -186,7 +187,7 @@
             <label for="edit-type">类型 *</label>
             <select id="edit-type" required>
               <option value="subscription">订阅链接</option>
-              <option value="node">单节点</option>
+              <option value="list">节点列表</option>
             </select>
           </div>
           <div class="form-group">
@@ -195,7 +196,8 @@
           </div>
           <div class="form-group">
             <label for="edit-url">订阅链接 *</label>
-            <input type="url" id="edit-url" required />
+            <textarea id="edit-url" required rows="3"></textarea>
+            <div id="edit-url-help" class="form-help">仅支持单条订阅链接</div>
           </div>
           <div class="form-group">
             <label for="edit-description">描述</label>
