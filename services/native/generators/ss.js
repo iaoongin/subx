@@ -34,7 +34,10 @@ class SSGenerator extends BaseGenerator {
         try {
             // 只处理 SS 节点
             if (node.type !== 'ss') {
-                // 尝试转换其他类型节点为 SS (基础转换)
+                // 允许多协议输出：保留原始 URI（若存在）
+                if (node.raw && /^(vmess|vless|trojan|hysteria2|ss):\/\//i.test(node.raw)) {
+                    return node.raw.trim();
+                }
                 return null;
             }
 

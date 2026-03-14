@@ -197,6 +197,7 @@ class SubscriptionFetcher {
                 }
                 const node = parser.parse(trimmedLine);
                 if (node) {
+                    if (!node.raw) node.raw = trimmedLine;
                     nodes.push(node);
                     parsed = true;
                 } else if (typeof parser.getLastError === 'function') {
@@ -206,6 +207,7 @@ class SubscriptionFetcher {
                 for (const p of this.parserList) {
                     const node = p.parse(trimmedLine);
                     if (node) {
+                        if (!node.raw) node.raw = trimmedLine;
                         nodes.push(node);
                         parsed = true;
                         break;

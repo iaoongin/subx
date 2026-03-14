@@ -73,7 +73,7 @@ class NativeConverter {
       }
 
       console.log(
-        `拉取汇总: ${fetchResults.length} 个订阅, 成功 ${successCount}, 失败 ${failCount}, 共 ${totalNodes} 个节点, ${totalFailures} 个解析失败`,
+        `拉取汇总: 订阅 ${fetchResults.length}, 成功 ${successCount}, 失败 ${failCount}, 节点 ${totalNodes}, 解析失败 ${totalFailures}`,
       );
 
       // 步骤 2: 合并节点
@@ -87,10 +87,8 @@ class NativeConverter {
 
       // 输出统计信息
       const stats = this.merger.getStats(allNodes);
-      const typeStr = Object.entries(stats.byType)
-        .map(([t, n]) => `${t}: ${n}`)
-        .join(", ");
-      console.log(`合并去重后: ${stats.total} 个节点 (${typeStr})`);
+      const mergedTypeStr = this.formatStats(stats.byType);
+      console.log(`合并去重后: 总计 ${stats.total}${mergedTypeStr ? `，协议: ${mergedTypeStr}` : ""}`);
 
       // 步骤 3: 生成目标格式
       currentStep = "generate-output";
@@ -101,8 +99,15 @@ class NativeConverter {
       }
 
       const generator = new Generator();
+      const validNodes = generator.filterValidNodes(allNodes);
       const result = generator.generate(allNodes);
 
+      const outputStats = this.getOutputStats(targetFormat, result, validNodes);
+      if (outputStats) {
+        const total = Object.values(outputStats).reduce((sum, n) => sum + n, 0);
+        const outputTypeStr = this.formatStats(outputStats);
+        console.log(`输出协议统计: 总计 ${total}${outputTypeStr ? `，协议: ${outputTypeStr}` : ""}`);
+      }
       console.log(`========== 原生转换完成 ==========\n`);
       return result;
     } catch (error) {
@@ -131,6 +136,43 @@ class NativeConverter {
     };
 
     return formatMap[format.toLowerCase()] || null;
+  }
+
+  formatStats(stats) {
+    if (!stats) return "";
+    return Object.entries(stats)
+      .sort((a, b) => {
+        if (b[1] !== a[1]) return b[1] - a[1];
+        return String(a[0]).localeCompare(String(b[0]));
+      })
+      .map(([t, n]) => `${t}: ${n}`)
+      .join(", ");
+  }
+
+  getOutputStats(format, result, nodes) {
+    const fmt = (format || "").toLowerCase();
+    if (fmt === "ss" || fmt === "shadowsocks") {
+      try {
+        const decoded = Buffer.from(result || "", "base64").toString("utf8");
+        const lines = decoded.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+        const stats = {};
+        for (const line of lines) {
+          const match = line.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//);
+          const protocol = match ? match[1].toLowerCase() : "unknown";
+          stats[protocol] = (stats[protocol] || 0) + 1;
+        }
+        return stats;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    const stats = {};
+    for (const node of nodes || []) {
+      const type = node.type || "unknown";
+      stats[type] = (stats[type] || 0) + 1;
+    }
+    return stats;
   }
 }
 
