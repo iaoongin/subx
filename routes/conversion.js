@@ -246,8 +246,8 @@ function createConversionRoutes(db) {
 
             // 强制刷新或无缓存：同步获取
             if (forceRefresh) {
-                console.log(`强制刷新: ${cacheKey}`);
-                cache.delete(cacheKey);
+                console.log(`强制刷新: 全量清空缓存, cacheKey=${cacheKey}`);
+                cache.clear();
             } else {
                 console.log(`缓存未命中: ${cacheKey}`);
             }
