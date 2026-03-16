@@ -38,6 +38,11 @@
     "subUpdateTime": 6,
     "total": 99,
     "timestamp": 4102329600000,
-    "adminPassword": "YOUR_ADMIN_PASSWORD_HERE"
+    "adminPassword": "YOUR_ADMIN_PASSWORD_HERE",
+    "conversionMode": "native",
+    "fallbackEnabled": false,
+    "nativeConverterEnabled": true,
+    "remoteConverterUrl": "https://subc.00321.xyz",
+    "remoteConverterProtocol": "https"
   }
 }

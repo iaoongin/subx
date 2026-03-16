@@ -11,6 +11,7 @@
 
 ### 📋 订阅管理
 - 在线添加、编辑、删除订阅链接
+- 支持“节点列表”：可粘贴多条节点链接并统一管理
 - 支持订阅状态切换（启用/禁用）
 - 实时订阅数量统计
 - 响应式设计，完美适配移动端
@@ -22,18 +23,20 @@
 - 配置热更新，无需重启服务
 
 ### 🔄 订阅转换
-- 支持多种客户端格式转换（Clash、Surge、SingBox等）
+- 支持多种客户端格式转换（本地支持 ss/clash/v2ray，其他格式依赖远程转换）
 - 智能客户端识别
 - 批量订阅合并
 - 公开API，无需登录即可使用
-- **本地转换器**：内置 subconverter 原生转换引擎
+- **本地转换器**：项目内置原生解析与生成器（无需依赖 subconverter）
 - **远程转换器**：支持调用远程转换 API
-- **智能回退**：本地转换失败时自动切换到远程
+- **智能回退**：本地转换失败时自动切换到远程（可关闭）
 - **灵活模式**：支持手动指定转换模式（native/remote）
+- **SS 输出多协议**：原生模式下 SS 输出可保留多协议 URI
 
 ### 📊 日志系统
 - **Winston 日志框架**：成熟稳定的企业级日志方案
 - **多文件分类**：combined.log（全部）、error.log（错误）、按日期归档
+- **按日期归档**：日志文件名为启动当日日期（跨日需重启才会生成新文件）
 - **自动轮转**：单文件最大10MB，自动创建新文件
 - **双重输出**：控制台彩色输出 + 文件持久化存储
 - **详细追踪**：包含时间戳、日志级别、文件位置和行号
@@ -82,14 +85,14 @@
 
 5. **访问系统**
    - 管理界面: http://localhost:3000/admin
-   - 默认密码: `admin123`
+   - 默认密码: 取决于 `data/config.json` 中的 `adminPassword`（模板为占位符，需自行填写）
 
 ## 🎯 使用指南
 
 ### 登录系统
 
 1. 访问 http://localhost:3000
-2. 输入管理员密码（默认: `admin123`）
+2. 输入管理员密码（以 `data/config.json` 的 `adminPassword` 为准）
 3. 点击登录进入管理界面
 
 ### 管理订阅
@@ -123,9 +126,11 @@
 
 系统支持三种转换模式：
 
-1. **本地模式（native）**：使用内置转换器，速度快，无需外部依赖
-2. **远程模式（remote）**：调用远程转换API，功能更强大
-3. **自动模式（默认）**：优先使用本地转换，失败后自动回退到远程
+1. **本地模式（native）**：使用内置转换器，速度快，无需外部依赖  
+   - 原生输出支持：`ss` / `clash` / `v2ray`
+2. **远程模式（remote）**：调用远程转换API，功能更强大  
+   - 由远程服务决定支持的客户端格式（如 Surge/SingBox/QuanX/Loon 等）
+3. **自动模式（默认）**：优先使用本地转换，失败后自动回退到远程（可通过 `fallbackEnabled` 关闭）
 
 #### 基本用法
 
@@ -148,12 +153,9 @@ curl "http://localhost:3000/your-token"
 
 #### 支持的客户端
 
-- **Clash**: 在URL中添加 `?clash=1` 或使用Clash客户端User-Agent
-- **Surge**: 在URL中添加 `?surge=1` 或使用Surge客户端User-Agent  
-- **SingBox**: 在URL中添加 `?sb=1` 或 `?singbox=1`
-- **Quantumult X**: 在URL中添加 `?quanx=1`
-- **Loon**: 在URL中添加 `?loon=1`
-- **其他**: 默认返回SS格式
+- **Clash**: 在URL中添加 `?clash=1` 或使用Clash客户端User-Agent（native/remote 均支持）
+- **SS**: 默认返回 SS 格式（native/remote 均支持）
+- **Surge / SingBox / Quantumult X / Loon**: 需使用 `remote` 模式（或开启回退），由远程转换器提供支持
 
 #### 示例
 
@@ -186,9 +188,9 @@ subx/
 │   └── native/               # 本地转换器
 │       ├── index.js          # 转换器主入口
 │       ├── fetcher.js        # 订阅源拉取
-│       ├── parser.js         # 节点解析器
 │       ├── merger.js         # 节点合并
-│       └── formatter.js      # 格式化输出
+│       ├── parsers/          # 节点解析器
+│       └── generators/       # 格式生成器
 ├── routes/                    # 路由层
 │   └── conversion.js         # 转换路由
 ├── utils/                     # 工具类
@@ -220,13 +222,13 @@ subx/
     "subUpdateTime": 6,                 // 更新间隔（小时）
     "total": 99,                        // 总流量限制（TB）
     "timestamp": 4102329600000,         // 过期时间戳
-    "adminPassword": "admin123",        // 管理员密码
+    "adminPassword": "YOUR_ADMIN_PASSWORD_HERE", // 管理员密码
 
     // 转换器配置
-    "conversionMode": "auto",           // 转换模式: auto/native/remote
-    "fallbackEnabled": true,            // 启用自动回退
+    "conversionMode": "native",         // 转换模式: auto/native/remote
+    "fallbackEnabled": false,           // 启用自动回退
     "nativeConverterEnabled": true,     // 启用本地转换器
-    "remoteConverterUrl": "https://api.example.com", // 远程转换API
+    "remoteConverterUrl": "https://subc.00321.xyz",  // 远程转换API
     "remoteConverterProtocol": "https"  // 远程API协议
   }
 }
@@ -336,9 +338,9 @@ type logs\app-2026-02-04.log
 
 ### Q: 本地转换器和远程转换器的区别？
 A:
-- **本地转换器**：速度快，无网络依赖，适合大部分场景
-- **远程转换器**：功能更全面，需要网络连接
-- **自动模式**：优先本地，失败时自动切换远程，推荐使用
+- **本地转换器**：速度快，无网络依赖，原生输出支持 `ss/clash/v2ray`
+- **远程转换器**：功能更全面，需要网络连接，支持更多客户端格式
+- **自动模式**：优先本地，失败时自动切换远程（可通过 `fallbackEnabled` 关闭）
 
 ### Q: 如何切换转换模式？
 A:

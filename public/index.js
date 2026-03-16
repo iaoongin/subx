@@ -101,6 +101,20 @@ class SubscriptionManager {
         e.preventDefault();
         this.addSubscription();
       });
+
+    const addType = document.getElementById("modal-type");
+    if (addType) {
+      addType.addEventListener("change", (e) => {
+        this.updateTypeUI("add", e.target.value);
+      });
+    }
+
+    const editType = document.getElementById("edit-type");
+    if (editType) {
+      editType.addEventListener("change", (e) => {
+        this.updateTypeUI("edit", e.target.value);
+      });
+    }
   }
 
   async loadConfig() {
@@ -313,16 +327,18 @@ class SubscriptionManager {
           usageText,
         });
 
-        const isNode = sub.type === 'node';
+        const isList = sub.type === 'list' || sub.type === 'node';
+        const typeLabel = isList ? "节点列表" : "订阅";
+        const listCount = isList ? this.parseNodeUrls(sub.url || "").length : 0;
 
         return `
           <div class="subscription-item ${sub.active ? "active" : "inactive"
           }">
             <div class="subscription-header">
               <div class="subscription-name" style="position: relative;">
-                ${isNode ? '🔌' : '📡'} ${sub.name}
+                ${isList ? '🔌' : '📡'} ${sub.name}
                 <span style="font-size: 0.8em; color: #666; margin-left: 8px; font-weight: normal; background: #eee; padding: 2px 6px; border-radius: 4px;">
-                  ${isNode ? '单节点' : '订阅'}
+                  ${typeLabel}
                 </span>
               </div>
               <div class="subscription-status ${sub.active ? "status-active" : "status-inactive"
@@ -331,13 +347,13 @@ class SubscriptionManager {
               </div>
             </div>
             <div class="subscription-url" title="${sub.url}" style="cursor: pointer;" onclick="subscriptionManager.copyToClipboard('${this.escapeJs(sub.url)}')">
-              🔗 ${isNode ? this.getProtocol(sub.url) + ' 节点' : this.getDomain(sub.url)}
+              🔗 ${isList ? `本地节点列表 · ${listCount} 条` : this.getDomain(sub.url)}
             </div>
             ${sub.description
             ? `<div class="subscription-description">${sub.description}</div>`
             : ""
           }
-            ${!isNode ? `
+            ${!isList ? `
             <div class="subscription-meta">
               <div class="subscription-meta-row" style="justify-content: space-between; margin-bottom: 8px;">
                 <span class="meta-traffic" style="font-size: 0.9em; color: #333;">${usageText}</span>
@@ -382,12 +398,52 @@ class SubscriptionManager {
       .getElementById("modal-description")
       .value.trim();
 
-    if (!name || !url) {
-      this.showMessage("请填写名称和链接", "error");
+    if (!url) {
+      const label = type === "list" ? "节点列表" : "订阅";
+      this.showMessage(`请填写${label}链接`, "error");
       return;
     }
 
     try {
+      if (type === "list") {
+        const urls = this.parseNodeUrls(url);
+        if (urls.length === 0) {
+          this.showMessage("请输入有效的节点链接", "error");
+          return;
+        }
+        const finalName = name || "节点列表";
+        const normalizedUrl = urls.join("\n");
+        const response = await fetch("/api/subscriptions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: finalName,
+            url: normalizedUrl,
+            description,
+            type,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          this.showMessage("节点列表添加成功！", "success");
+          document.getElementById("addForm").reset();
+          closeModal("addModal");
+          this.loadSubscriptions();
+        } else {
+          this.showMessage("添加失败：" + result.error, "error");
+        }
+        return;
+      }
+
+      if (!name) {
+        this.showMessage("请填写订阅名称", "error");
+        return;
+      }
+
       const response = await fetch("/api/subscriptions", {
         method: "POST",
         headers: {
@@ -457,7 +513,8 @@ class SubscriptionManager {
 
   async updateSubscription(id, name, url, description, type) {
     if (!name || !url) {
-      this.showMessage("名称和链接不能为空", "error");
+      const label = type === "node" ? "节点" : "订阅";
+      this.showMessage(`${label}名称和链接不能为空`, "error");
       return;
     }
 
@@ -494,7 +551,12 @@ class SubscriptionManager {
   }
 
   escapeJs(text) {
-    return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
+    return text
+      .replace(/\\/g, "\\\\")
+      .replace(/\r/g, "\\r")
+      .replace(/\n/g, "\\n")
+      .replace(/'/g, "\\'")
+      .replace(/"/g, '\\"');
   }
 
   getProtocol(url) {
@@ -515,6 +577,41 @@ class SubscriptionManager {
       return urlObj.hostname;
     } catch (e) {
       return url;
+    }
+  }
+
+  parseNodeUrls(text) {
+    return text
+      .split(/[\r\n,;\s]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+  }
+
+  updateTypeUI(mode, type) {
+    const normalizedType = type === "node" ? "list" : type;
+    const isList = normalizedType === "list";
+    const label = isList ? "节点列表" : "订阅链接";
+    const placeholder = isList
+      ? "trojan://example.com:443?security=tls#节点名\nvmess://xxxx\n..."
+      : "https://example.com/subscribe";
+    const helpText = isList
+      ? "可粘贴多条节点链接，每行一条"
+      : "仅支持单条订阅链接";
+
+    if (mode === "add") {
+      const urlLabel = document.querySelector('label[for="modal-url"]');
+      const urlInput = document.getElementById("modal-url");
+      const urlHelp = document.getElementById("modal-url-help");
+      if (urlLabel) urlLabel.textContent = `${label} *`;
+      if (urlInput) urlInput.placeholder = placeholder;
+      if (urlHelp) urlHelp.textContent = helpText;
+    } else if (mode === "edit") {
+      const urlLabel = document.querySelector('label[for="edit-url"]');
+      const urlInput = document.getElementById("edit-url");
+      const urlHelp = document.getElementById("edit-url-help");
+      if (urlLabel) urlLabel.textContent = `${label} *`;
+      if (urlInput) urlInput.placeholder = placeholder;
+      if (urlHelp) urlHelp.textContent = helpText;
     }
   }
 
@@ -763,6 +860,8 @@ function openConfigModal() {
 }
 function openAddModal() {
   document.getElementById("addForm").reset();
+  const type = document.getElementById("modal-type")?.value || "subscription";
+  subscriptionManager.updateTypeUI("add", type);
   openModal("addModal");
 }
 
@@ -771,7 +870,9 @@ function openEditModal(id, name, url, description, type) {
   document.getElementById("edit-name").value = name;
   document.getElementById("edit-url").value = url;
   document.getElementById("edit-description").value = description;
-  document.getElementById("edit-type").value = type || 'subscription';
+  const normalizedType = type === "node" ? "list" : (type || "subscription");
+  document.getElementById("edit-type").value = normalizedType;
+  subscriptionManager.updateTypeUI("edit", normalizedType);
   openModal("editModal");
 }
 
@@ -788,11 +889,26 @@ document
       .getElementById("edit-description")
       .value.trim();
     const type = document.getElementById("edit-type").value;
+    const normalizedType = type === "node" ? "list" : type;
+    const urls = normalizedType === "list"
+      ? subscriptionManager.parseNodeUrls(url)
+      : [url];
 
-    if (!name || !url) {
-      subscriptionManager.showMessage("订阅名称和链接不能为空", "error");
+    if (!url) {
+      const label = normalizedType === "list" ? "节点列表" : "订阅";
+      subscriptionManager.showMessage(`${label}链接不能为空`, "error");
       return;
     }
+
+    const finalName =
+      name ||
+      (normalizedType === "list" ? "节点列表" : "");
+    if (!finalName) {
+      subscriptionManager.showMessage("请填写订阅名称", "error");
+      return;
+    }
+
+    const normalizedUrl = normalizedType === "list" ? urls.join("\n") : urls[0];
 
     try {
       const response = await fetch(`/api/subscriptions/${id}`, {
@@ -800,7 +916,12 @@ document
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ name, url, description, type }),
+        body: JSON.stringify({
+          name: finalName,
+          url: normalizedUrl,
+          description,
+          type: normalizedType,
+        }),
       });
 
       const result = await response.json();

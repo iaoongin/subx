@@ -47,6 +47,7 @@ class Database {
         this.data = JSON.parse(jsonData);
         // 配置迁移：添加新配置项的默认值
         this.migrateConfig();
+        this.migrateSubscriptions();
         // console.log("从JSON文件加载数据成功");
       } else {
         console.log("JSON文件不存在，使用默认数据");
@@ -76,6 +77,21 @@ class Database {
       }
     }
 
+    if (needsSave) {
+      this.saveData();
+    }
+  }
+
+  migrateSubscriptions() {
+    let needsSave = false;
+    if (Array.isArray(this.data.subscriptions)) {
+      for (const sub of this.data.subscriptions) {
+        if (sub && sub.type === "node") {
+          sub.type = "list";
+          needsSave = true;
+        }
+      }
+    }
     if (needsSave) {
       this.saveData();
     }

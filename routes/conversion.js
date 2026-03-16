@@ -62,17 +62,19 @@ function createConversionRoutes(db) {
 
         // 从数据库获取活跃的订阅地址和配置
         let activeUrls;
+        let activeSubscriptions;
         let config;
 
         try {
-            activeUrls = await db.getActiveSubscriptionUrls();
+            activeSubscriptions = await db.getActiveSubscriptions();
             config = await db.getConfig();
 
-            if (activeUrls.length === 0) {
+            if (activeSubscriptions.length === 0) {
                 console.log("数据库中没有活跃订阅，使用默认数据");
                 activeUrls = await ADD(MainData);
             } else {
-                console.log("从数据库获取到", activeUrls.length, "个活跃订阅");
+                activeUrls = expandSubscriptionUrls(activeSubscriptions);
+                console.log("从数据库获取到", activeSubscriptions.length, "个活跃订阅，展开为", activeUrls.length, "条链接");
             }
         } catch (dbError) {
             console.error("数据库查询失败，使用默认数据:", dbError);
@@ -164,6 +166,23 @@ function createConversionRoutes(db) {
             });
             return await response.text();
         }
+    }
+
+    function expandSubscriptionUrls(subscriptions) {
+        const urls = [];
+        for (const sub of subscriptions) {
+            if (!sub || !sub.url) continue;
+            if (sub.type === "list" || sub.type === "node") {
+                const parts = sub.url
+                    .split(/[\r\n,;]+/)
+                    .map((s) => s.trim())
+                    .filter((s) => s.length > 0);
+                urls.push(...parts);
+            } else {
+                urls.push(sub.url);
+            }
+        }
+        return urls;
     }
 
     router.get("/:path", async (req, res) => {
