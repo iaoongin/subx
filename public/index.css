@@ -390,6 +390,37 @@
         background: #e2e8f0;
     }
 
+    .usage-bar.loading {
+        position: relative;
+        overflow: hidden;
+        background: #edf2f7;
+    }
+
+    .usage-bar.loading::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -40%;
+        width: 40%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+        animation: usageShimmer 1.2s infinite;
+    }
+
+    @keyframes usageShimmer {
+        0% {
+            left: -40%;
+        }
+        100% {
+            left: 100%;
+        }
+    }
+
+    .meta-traffic.pending,
+    .meta-expire.pending {
+        color: #9aa0a6 !important;
+    }
+
     .usage-download {
         height: 100%;
         background: linear-gradient(90deg, #4f86ff 0%, #3b6ef0 100%);

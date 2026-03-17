@@ -1,6 +1,96 @@
 const express = require("express");
 const router = express.Router();
 
+const USAGE_TTL_MS = 3 * 60 * 1000;
+const USAGE_TIMEOUT_MS = 8000;
+const usageCache = new Map();
+
+function createEmptyUserinfo() {
+    return { upload: 0, download: 0, total: 0, expire: 0 };
+}
+
+function parseUserinfoHeader(infoStr) {
+    const userinfo = createEmptyUserinfo();
+    if (!infoStr) return userinfo;
+
+    infoStr.split(";").forEach((pair) => {
+        const [key, value] = pair.split("=").map((s) => s.trim());
+        if (["upload", "download", "total", "expire"].includes(key)) {
+            userinfo[key] = Number(value) || 0;
+        }
+    });
+
+    return userinfo;
+}
+
+function getCachedUsage(sub) {
+    const key = String(sub.id);
+    const cached = usageCache.get(key);
+    if (!cached) return null;
+    if (cached.url !== sub.url) return null;
+    return cached;
+}
+
+function setCachedUsage(sub, userinfo) {
+    const now = Date.now();
+    const key = String(sub.id);
+    usageCache.set(key, {
+        url: sub.url,
+        userinfo,
+        updatedAt: now,
+        expiresAt: now + USAGE_TTL_MS,
+        refreshing: false,
+    });
+}
+
+function markRefreshing(sub, refreshing) {
+    const key = String(sub.id);
+    const cached = usageCache.get(key);
+    if (!cached) return;
+    cached.refreshing = refreshing;
+    usageCache.set(key, cached);
+}
+
+async function fetchSubscriptionUsage(sub) {
+    if (!sub.url) return createEmptyUserinfo();
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), USAGE_TIMEOUT_MS);
+
+    try {
+        const resp = await fetch(sub.url, {
+            headers: { "User-Agent": "Clash Verge" },
+            signal: controller.signal,
+        });
+
+        if (!resp.ok) {
+            throw new Error(`status ${resp.status}`);
+        }
+
+        const infoStr = resp.headers.get("subscription-userinfo");
+        return parseUserinfoHeader(infoStr);
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+function refreshUsageInBackground(sub) {
+    const cached = getCachedUsage(sub);
+    if (!cached || cached.refreshing) return;
+
+    markRefreshing(sub, true);
+    fetchSubscriptionUsage(sub)
+        .then((userinfo) => {
+            setCachedUsage(sub, userinfo);
+        })
+        .catch((error) => {
+            console.error("Background usage refresh failed", sub.url, error);
+        })
+        .finally(() => {
+            markRefreshing(sub, false);
+        });
+}
+
 /**
  * 创建订阅管理相关路由
  * @param {object} db - 数据库实例
@@ -11,48 +101,113 @@ function createSubscriptionRoutes(db) {
     router.get("/api/subscriptions", async (req, res) => {
         try {
             const subscriptions = await db.getAllSubscriptions();
-            // 实时拉取每个订阅的流量信息，接口为订阅的 url 字段
-            const result = await Promise.all(
-                subscriptions.map(async (sub) => {
-                    let userinfo = { upload: 0, download: 0, total: 0, expire: 0 };
-                    // 如果是单节点/节点列表类型，直接跳过流量查询
-                    if (sub.type === 'node' || sub.type === 'list') {
-                        return { ...sub, userinfo };
+            res.json(subscriptions);
+        } catch (error) {
+            console.error("Failed to fetch subscriptions:", error);
+            res.status(500).json({ error: "Failed to fetch subscriptions" });
+        }
+    });
+    // Usage info (batch)
+    router.get("/api/subscriptions/usage", async (req, res) => {
+        try {
+            const refresh =
+                req.query.refresh === "1" ||
+                req.query.refresh === "true" ||
+                req.query.refresh === "yes";
+
+            const idParam = typeof req.query.ids === "string" ? req.query.ids : "";
+            const idSet = new Set(
+                idParam
+                    .split(",")
+                    .map((id) => Number(id.trim()))
+                    .filter((id) => Number.isFinite(id))
+            );
+
+            const subscriptions = await db.getAllSubscriptions();
+            const targetSubscriptions =
+                idSet.size > 0
+                    ? subscriptions.filter((sub) => idSet.has(Number(sub.id)))
+                    : subscriptions;
+
+            const results = await Promise.all(
+                targetSubscriptions.map(async (sub) => {
+                    const isList = sub.type === "node" || sub.type === "list";
+                    if (isList) {
+                        return {
+                            id: sub.id,
+                            userinfo: createEmptyUserinfo(),
+                            skipped: true,
+                            updatedAt: 0,
+                            isStale: false,
+                        };
+                    }
+
+                    const cached = getCachedUsage(sub);
+                    const now = Date.now();
+
+                    if (!refresh && cached && now < cached.expiresAt) {
+                        return {
+                            id: sub.id,
+                            userinfo: cached.userinfo,
+                            updatedAt: cached.updatedAt,
+                            isStale: false,
+                            fromCache: true,
+                        };
+                    }
+
+                    if (!refresh && cached && now >= cached.expiresAt) {
+                        refreshUsageInBackground(sub);
+                        return {
+                            id: sub.id,
+                            userinfo: cached.userinfo,
+                            updatedAt: cached.updatedAt,
+                            isStale: true,
+                            fromCache: true,
+                        };
                     }
 
                     try {
-                        if (sub.url) {
-                            const resp = await fetch(sub.url, {
-                                headers: { "User-Agent": "Clash Verge" },
-                            });
-                            if (resp.ok) {
-                                // 从响应头获取 subscription-userinfo
-                                const infoStr = resp.headers.get("subscription-userinfo");
-                                if (infoStr) {
-                                    // 解析格式：upload=...; download=...; total=...; expire=...
-                                    infoStr.split(";").forEach((pair) => {
-                                        const [key, value] = pair.split("=").map((s) => s.trim());
-                                        if (["upload", "download", "total", "expire"].includes(key)) {
-                                            userinfo[key] = Number(value) || 0;
-                                        }
-                                    });
-                                }
-                            }
+                        const userinfo = await fetchSubscriptionUsage(sub);
+                        setCachedUsage(sub, userinfo);
+                        return {
+                            id: sub.id,
+                            userinfo,
+                            updatedAt: Date.now(),
+                            isStale: false,
+                            fromCache: false,
+                        };
+                    } catch (error) {
+                        console.error("Failed to fetch usage", sub.url, error);
+                        if (cached) {
+                            return {
+                                id: sub.id,
+                                userinfo: cached.userinfo,
+                                updatedAt: cached.updatedAt,
+                                isStale: true,
+                                fromCache: true,
+                                error: "fetch_failed",
+                            };
                         }
-                    } catch (e) {
-                        console.error("拉取流量信息失败", sub.url, e);
+                        return {
+                            id: sub.id,
+                            userinfo: createEmptyUserinfo(),
+                            updatedAt: Date.now(),
+                            isStale: true,
+                            fromCache: false,
+                            error: "fetch_failed",
+                        };
                     }
-                    return { ...sub, userinfo };
                 })
             );
-            res.json(result);
+
+            res.json({ data: results });
         } catch (error) {
-            console.error("获取订阅列表失败:", error);
-            res.status(500).json({ error: "获取订阅列表失败" });
+            console.error("Failed to fetch usage info:", error);
+            res.status(500).json({ error: "Failed to fetch usage info" });
         }
     });
 
-    // 添加新订阅
+    // Add subscription
     router.post("/api/subscriptions", async (req, res) => {
         try {
             const { name, url, description, type } = req.body;

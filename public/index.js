@@ -20,16 +20,28 @@ function hideLoading() {
 
 // 拦截全局 fetch 请求以自动显示 Loading
 const originalFetch = window.fetch;
-window.fetch = async function (...args) {
-  // 某些特定不需要 loading 的请求可以在这里过滤
-  showLoading();
+window.fetch = async function (resource, init) {
+  let skipLoading = false;
+  let finalInit = init;
+
+  if (init && init.skipLoading) {
+    skipLoading = true;
+    finalInit = { ...init };
+    delete finalInit.skipLoading;
+  }
+
+  if (!skipLoading) {
+    showLoading();
+  }
   try {
-    const response = await originalFetch(...args);
+    const response = await originalFetch(resource, finalInit);
     return response;
   } catch (error) {
     throw error;
   } finally {
-    hideLoading();
+    if (!skipLoading) {
+      hideLoading();
+    }
   }
 };
 
@@ -150,12 +162,12 @@ class SubscriptionManager {
           const url = `/${this.token}?refresh=true`;
           const response = await fetch(url);
           if (response.ok) {
-            this.showMessage("缓存刷新成功！", "success");
+            this.showMessage("\u6d41\u91cf\u5df2\u5237\u65b0", "success");
           } else {
             this.showMessage("刷新失败，状态码：" + response.status, "error");
           }
         } catch (error) {
-          this.showMessage("刷新请求失败：" + error.message, "error");
+          this.showMessage("\u5237\u65b0\u6d41\u91cf\u5931\u8d25: " + error.message, "error");
         }
       }
     );
@@ -166,14 +178,68 @@ class SubscriptionManager {
       console.log("Fetching subscriptions...");
       const response = await fetch(this.apiBase + "/api/subscriptions");
       if (!response.ok) throw new Error("Failed to fetch subscriptions");
-      this.subscriptions = await response.json();
+      const data = await response.json();
+      this.subscriptions = (data || []).map((sub) => {
+        const isList = sub.type === "list" || sub.type === "node";
+        if (isList) return sub;
+        if (sub.userinfo && typeof sub.userinfo === "object") return sub;
+        return { ...sub, userinfo: { pending: true } };
+      });
       console.log("Fetched subscriptions:", this.subscriptions);
       this.renderSubscriptions(this.subscriptions);
       this.updateStats(this.subscriptions);
+      this.loadUsage().catch((error) => {
+        console.error("Error loading usage:", error);
+      });
     } catch (error) {
       console.error("Error loading subscriptions:", error);
       document.getElementById("subscriptionsList").innerHTML =
         '<div class="error">加载失败，请稍后重试</div>';
+    }
+  }
+
+  async loadUsage({ refresh = false } = {}) {
+    const ids = this.subscriptions
+      .filter((sub) => sub.type !== "list" && sub.type !== "node")
+      .map((sub) => sub.id)
+      .join(",");
+
+    if (!ids) return;
+
+    const url = `/api/subscriptions/usage?ids=${encodeURIComponent(ids)}${
+      refresh ? "&refresh=1" : ""
+    }`;
+    const response = await fetch(url, { skipLoading: true });
+    if (!response.ok) throw new Error("Failed to fetch usage");
+
+    const result = await response.json();
+    const usageMap = new Map(
+      (result.data || []).map((item) => [String(item.id), item])
+    );
+
+    this.subscriptions = this.subscriptions.map((sub) => {
+      const usage = usageMap.get(String(sub.id));
+      if (!usage) return sub;
+      return {
+        ...sub,
+        userinfo: usage.userinfo || {},
+        _usageMeta: {
+          isStale: usage.isStale,
+          updatedAt: usage.updatedAt,
+        },
+      };
+    });
+
+    this.renderSubscriptions(this.subscriptions);
+  }
+
+  async refreshUsage() {
+    try {
+      await this.loadUsage({ refresh: true });
+      this.showMessage("流量已刷新", "success");
+    } catch (error) {
+      console.error("Error refreshing usage:", error);
+      this.showMessage("刷新流量失败: " + error.message, "error");
     }
   }
 
@@ -304,21 +370,29 @@ class SubscriptionManager {
       .map((sub) => {
         console.log("Processing subscription:", sub);
         // 仅使用接口返回的 userinfo，不再从配置或页面读取 total
+        const isList = sub.type === 'list' || sub.type === 'node';
         const userinfo = sub.userinfo || {};
+        const usagePending = !isList && userinfo.pending === true;
 
         const usage = this.calculateUsage(userinfo);
         const usageClass = this.getUsageClass(usage);
-        // 使用分段进度条，显示下载/上传在同一条上的占比与总流量
-        const usageHtml = this.formatUsageBar(
-          userinfo.upload || 0,
-          userinfo.download || 0,
-          userinfo.total
-        );
-        const usageText = this.formatUsageText(
-          userinfo.upload || 0,
-          userinfo.download || 0,
-          userinfo.total
-        );
+        const usageHtml = usagePending
+          ? '\u52a0\u8f7d\u4e2d...'
+          : this.formatUsageBar(
+              userinfo.upload || 0,
+              userinfo.download || 0,
+              userinfo.total
+            );
+        const usageText = usagePending
+          ? '加载中...'
+          : this.formatUsageText(
+              userinfo.upload || 0,
+              userinfo.download || 0,
+              userinfo.total
+            );
+        const expireText = usagePending
+          ? '...'
+          : this.formatExpireDate(userinfo.expire);
 
         console.log("Processed values:", {
           usage,
@@ -327,7 +401,6 @@ class SubscriptionManager {
           usageText,
         });
 
-        const isList = sub.type === 'list' || sub.type === 'node';
         const typeLabel = isList ? "节点列表" : "订阅";
         const listCount = isList ? this.parseNodeUrls(sub.url || "").length : 0;
 
@@ -356,8 +429,8 @@ class SubscriptionManager {
             ${!isList ? `
             <div class="subscription-meta">
               <div class="subscription-meta-row" style="justify-content: space-between; margin-bottom: 8px;">
-                <span class="meta-traffic" style="font-size: 0.9em; color: #333;">${usageText}</span>
-                <span class="meta-expire" style="font-size: 0.9em; color: #666;">${this.formatExpireDate(sub.userinfo?.expire)}</span>
+                <span class="meta-traffic${usagePending ? " pending" : ""}" style="font-size: 0.9em; color: #333;">${usageText}</span>
+                <span class="meta-expire${usagePending ? " pending" : ""}" style="font-size: 0.9em; color: #666;">${expireText}</span>
               </div>
               <div class="subscription-meta-row">
                 ${usageHtml}
