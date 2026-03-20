@@ -117,6 +117,7 @@
    - **访问令牌**: 用于订阅转换API的身份验证
    - **文件名称**: 订阅文件的显示名称
    - **更新间隔**: 订阅自动更新的时间间隔
+   - **默认预览格式**: 预览按钮默认输出 ss 或 clash
    - **管理员密码**: 登录系统的密码
    - **Telegram配置**: 可选的通知功能
 
@@ -223,6 +224,7 @@ subx/
     "total": 99,                        // 总流量限制（TB）
     "timestamp": 4102329600000,         // 过期时间戳
     "adminPassword": "YOUR_ADMIN_PASSWORD_HERE", // 管理员密码
+    "defaultPreviewFormat": "ss",       // 默认预览格式: ss/clash
 
     // 转换器配置
     "conversionMode": "native",         // 转换模式: auto/native/remote

@@ -23,6 +23,7 @@ class Database {
         nativeConverterEnabled: true,
         remoteConverterUrl: "https://subc.00321.xyz",
         remoteConverterProtocol: "https",
+        defaultPreviewFormat: "ss",
       },
     };
     this.init();
@@ -67,6 +68,7 @@ class Database {
       nativeConverterEnabled: true,
       remoteConverterUrl: "https://subc.00321.xyz",
       remoteConverterProtocol: "https",
+      defaultPreviewFormat: "ss",
     };
 
     for (const [key, defaultValue] of Object.entries(defaultConversionConfig)) {
@@ -162,6 +164,7 @@ class Database {
         nativeConverterEnabled: true,
         remoteConverterUrl: "https://subc.00321.xyz",
         remoteConverterProtocol: "https",
+        defaultPreviewFormat: "ss",
       },
     };
     this.saveData();
@@ -385,6 +388,7 @@ class Database {
           nativeConverterEnabled: true,
           remoteConverterUrl: "https://subc.00321.xyz",
           remoteConverterProtocol: "https",
+          defaultPreviewFormat: "ss",
         };
 
         if (this.saveData()) {

@@ -144,8 +144,21 @@ class SubscriptionManager {
       this.showMessage("Token未加载，请稍后再试", "error");
       return;
     }
-    const url = `/${this.token}`;
-    window.open(url, '_blank');
+    const format =
+      typeof configManager?.getDefaultPreviewFormat === "function"
+        ? configManager.getDefaultPreviewFormat()
+        : "ss";
+    const url = this.buildPreviewUrl(this.token, format);
+    window.open(url, "_blank");
+  }
+
+  buildPreviewUrl(token, format) {
+    const base = `/${token}`;
+    const normalized = String(format || "").toLowerCase();
+    if (normalized === "clash") {
+      return `${base}?clash=1`;
+    }
+    return base;
   }
 
   refreshSubscription() {
@@ -702,6 +715,7 @@ class SubscriptionManager {
 class ConfigManager {
   constructor() {
     this.extensionScriptEditor = new AceScriptEditor("modal-extensionScriptEditor");
+    this.currentConfig = null;
     this.init();
   }
 
@@ -745,6 +759,11 @@ class ConfigManager {
     document.getElementById("modal-token").value = config.token || "";
     document.getElementById("modal-fileName").value =
       config.fileName || "";
+    const previewFormat = config.defaultPreviewFormat || "ss";
+    const previewFormatEl = document.getElementById("modal-defaultPreviewFormat");
+    if (previewFormatEl) {
+      previewFormatEl.value = previewFormat;
+    }
     document.getElementById("modal-subUpdateTime").value =
       config.subUpdateTime || 6;
     document.getElementById("modal-total").value = config.total ?? 0;
@@ -754,12 +773,15 @@ class ConfigManager {
     document.getElementById("modal-adminPassword").value =
       config.adminPassword || "";
     this.extensionScriptEditor.setValue(extensionScript || DEFAULT_EXTENSION_SCRIPT);
+    this.currentConfig = { ...config, defaultPreviewFormat: previewFormat };
   }
 
   async saveConfig() {
     const config = {
       token: document.getElementById("modal-token").value.trim(),
       fileName: document.getElementById("modal-fileName").value.trim(),
+      defaultPreviewFormat:
+        document.getElementById("modal-defaultPreviewFormat")?.value || "ss",
       subUpdateTime:
         parseInt(document.getElementById("modal-subUpdateTime").value) ||
         6,
@@ -803,6 +825,7 @@ class ConfigManager {
 
       if (configResponse.ok && scriptResponse.ok) {
         this.showMessage("配置保存成功！", "success");
+        this.currentConfig = configResult.config || config;
         closeModal("configModal");
       } else {
         const errorMsg = configResult.error || scriptResult.error || "保存失败";
@@ -836,6 +859,10 @@ class ConfigManager {
         }
       }
     );
+  }
+
+  getDefaultPreviewFormat() {
+    return this.currentConfig?.defaultPreviewFormat || "ss";
   }
 
   showMessage(message, type) {
