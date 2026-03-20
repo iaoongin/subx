@@ -1094,3 +1094,214 @@
     .toast-close:hover {
         color: #333;
     }
+
+    /* =========================== 分组选择器样式 =========================== */
+    .group-selector-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        margin-bottom: 16px;
+        background: linear-gradient(135deg, #f8f9ff 0%, #f0f0ff 100%);
+        border-radius: 10px;
+        border: 1px solid #e8e8f0;
+    }
+
+    .group-selector-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .group-selector-left label {
+        font-weight: 600;
+        color: #4a5568;
+        font-size: 14px;
+        white-space: nowrap;
+    }
+
+    .group-selector-left select {
+        padding: 8px 36px 8px 12px;
+        border: 2px solid #e1e1e1;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #333;
+        background-color: #fff;
+        cursor: pointer;
+        transition: all 0.3s;
+        appearance: none;
+        -webkit-appearance: none;
+        background-repeat: no-repeat;
+        background-position: right 10px center;
+        background-size: 16px;
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23667eea" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>');
+        min-width: 160px;
+    }
+
+    .group-selector-left select:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+    }
+
+    .group-selector-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .group-token-btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    }
+
+    .group-token-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    /* =========================== 分组管理列表样式 =========================== */
+    .group-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .group-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 16px;
+        background: #f8f9fa;
+        border-radius: 10px;
+        border: 1px solid #e8e8f0;
+        transition: all 0.3s ease;
+    }
+
+    .group-item:hover {
+        background: #f0f0ff;
+        border-color: #d0d0e8;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .group-item-info {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .group-item-name {
+        font-weight: 600;
+        font-size: 15px;
+        color: #2d3748;
+    }
+
+    .group-item-token {
+        font-size: 12px;
+        color: #718096;
+        font-family: "SF Mono", "Cascadia Code", monospace;
+    }
+
+    .group-item-actions {
+        display: flex;
+        gap: 6px;
+    }
+
+    /* =========================== 绑定订阅列表样式 =========================== */
+    .attach-sub-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .attach-sub-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 14px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #e8e8f0;
+        transition: background 0.2s;
+    }
+
+    .attach-sub-item:hover {
+        background: #f0f0ff;
+    }
+
+    .attach-sub-info {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .attach-sub-name {
+        font-weight: 500;
+        color: #2d3748;
+        font-size: 14px;
+    }
+
+    .attach-sub-type {
+        font-size: 11px;
+        color: #666;
+        background: #eee;
+        padding: 2px 6px;
+        border-radius: 4px;
+    }
+
+    /* 分组选择器响应式 */
+    @media (max-width: 768px) {
+        .group-selector-bar {
+            flex-direction: column;
+            gap: 10px;
+            align-items: stretch;
+        }
+
+        .group-selector-left {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .group-selector-left select {
+            min-width: auto;
+            width: 100%;
+        }
+
+        .group-selector-right {
+            justify-content: center;
+        }
+
+        .group-item {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .group-item-actions {
+            align-self: flex-end;
+        }
+
+        .attach-sub-item {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .attach-sub-item button {
+            align-self: flex-end;
+        }
+    }

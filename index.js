@@ -11,6 +11,7 @@ const { getLocalIPAddresses } = require("./utils/network");
 // 创建路由
 const createAuthRoutes = require("./routes/auth");
 const createSubscriptionRoutes = require("./routes/subscriptions");
+const createGroupRoutes = require("./routes/groups");
 const createConfigRoutes = require("./routes/config");
 const createConversionRoutes = require("./routes/conversion");
 
@@ -70,6 +71,7 @@ loadConfigFromDatabase();
 // 注册路由
 app.use(createAuthRoutes(db, requireAuth));
 app.use(createSubscriptionRoutes(db));
+app.use(createGroupRoutes(db));
 app.use(createConfigRoutes(db));
 app.use(createConversionRoutes(db));
 

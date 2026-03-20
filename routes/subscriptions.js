@@ -107,7 +107,7 @@ function createSubscriptionRoutes(db) {
             res.status(500).json({ error: "Failed to fetch subscriptions" });
         }
     });
-    // Usage info (batch)
+    // Usage info (batch) - 支持 groupId 和 ids 参数
     router.get("/api/subscriptions/usage", async (req, res) => {
         try {
             const refresh =
@@ -123,11 +123,24 @@ function createSubscriptionRoutes(db) {
                     .filter((id) => Number.isFinite(id))
             );
 
-            const subscriptions = await db.getAllSubscriptions();
-            const targetSubscriptions =
-                idSet.size > 0
-                    ? subscriptions.filter((sub) => idSet.has(Number(sub.id)))
-                    : subscriptions;
+            const groupId = req.query.groupId;
+
+            // 根据 groupId 或 ids 获取目标订阅
+            let targetSubscriptions;
+            if (groupId) {
+                // 按分组关联过滤
+                const groupSubs = await db.getSubscriptionsByGroup(groupId);
+                targetSubscriptions =
+                    idSet.size > 0
+                        ? groupSubs.filter((sub) => idSet.has(Number(sub.id)))
+                        : groupSubs;
+            } else {
+                const subscriptions = await db.getAllSubscriptions();
+                targetSubscriptions =
+                    idSet.size > 0
+                        ? subscriptions.filter((sub) => idSet.has(Number(sub.id)))
+                        : subscriptions;
+            }
 
             const results = await Promise.all(
                 targetSubscriptions.map(async (sub) => {

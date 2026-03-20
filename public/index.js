@@ -93,17 +93,22 @@ class SubscriptionManager {
     this.apiBase = "";
     this.subscriptions = [];
     this.token = null;
-    this.init();
+    this.currentGroupId = null;
+    this.currentGroupToken = null;
   }
 
   async init() {
     try {
-      await this.loadConfig();
-      await this.loadSubscriptions();
       this.bindEvents();
     } catch (error) {
       console.error("Failed to initialize:", error);
     }
+  }
+
+  setGroup(groupId, groupToken) {
+    this.currentGroupId = groupId;
+    this.currentGroupToken = groupToken;
+    this.token = groupToken;
   }
 
   bindEvents() {
@@ -129,26 +134,16 @@ class SubscriptionManager {
     }
   }
 
-  async loadConfig() {
-    try {
-      const response = await fetch("/api/config");
-      const config = await response.json();
-      this.token = config.token;
-    } catch (error) {
-      console.error("Failed to load config:", error);
-    }
-  }
-
   previewSubscription() {
-    if (!this.token) {
-      this.showMessage("Token未加载，请稍后再试", "error");
+    if (!this.currentGroupToken) {
+      this.showMessage("请先选择分组", "error");
       return;
     }
     const format =
       typeof configManager?.getDefaultPreviewFormat === "function"
         ? configManager.getDefaultPreviewFormat()
         : "ss";
-    const url = this.buildPreviewUrl(this.token, format);
+    const url = this.buildPreviewUrl(this.currentGroupToken, format);
     window.open(url, "_blank");
   }
 
@@ -162,8 +157,8 @@ class SubscriptionManager {
   }
 
   refreshSubscription() {
-    if (!this.token) {
-      this.showMessage("Token未加载，请稍后再试", "error");
+    if (!this.currentGroupToken) {
+      this.showMessage("请先选择分组", "error");
       return;
     }
 
@@ -172,7 +167,7 @@ class SubscriptionManager {
       "确定要刷新订阅缓存吗？<br><span style='color: #666; font-size: 13px;'>这将强制重新获取所有订阅内容，可能需要一些时间。</span>",
       async () => {
         try {
-          const url = `/${this.token}?refresh=true`;
+          const url = `/${this.currentGroupToken}?refresh=true`;
           const response = await fetch(url);
           if (response.ok) {
             this.showMessage("\u6d41\u91cf\u5df2\u5237\u65b0", "success");
@@ -188,8 +183,16 @@ class SubscriptionManager {
 
   async loadSubscriptions() {
     try {
-      console.log("Fetching subscriptions...");
-      const response = await fetch(this.apiBase + "/api/subscriptions");
+      if (!this.currentGroupId) {
+        document.getElementById("subscriptionsList").innerHTML =
+          '<div class="no-subscriptions">请先选择分组</div>';
+        this.subscriptions = [];
+        this.updateStats([]);
+        return;
+      }
+
+      console.log("Fetching subscriptions for group:", this.currentGroupId);
+      const response = await fetch(`/api/groups/${this.currentGroupId}/subscriptions`);
       if (!response.ok) throw new Error("Failed to fetch subscriptions");
       const data = await response.json();
       this.subscriptions = (data || []).map((sub) => {
@@ -219,9 +222,10 @@ class SubscriptionManager {
 
     if (!ids) return;
 
+    const groupParam = this.currentGroupId ? `&groupId=${this.currentGroupId}` : "";
     const url = `/api/subscriptions/usage?ids=${encodeURIComponent(ids)}${
       refresh ? "&refresh=1" : ""
-    }`;
+    }${groupParam}`;
     const response = await fetch(url, { skipLoading: true });
     if (!response.ok) throw new Error("Failed to fetch usage");
 
@@ -467,6 +471,8 @@ class SubscriptionManager {
               </button>
               <button class="btn btn-sm btn-danger" onclick="subscriptionManager.deleteSubscription('${sub.id
           }', '${this.escapeJs(sub.name)}')">删除</button>
+              <button class="btn btn-sm" style="background: #6c757d; color: white;" onclick="groupManager.detachSubscription('${sub.id
+          }', '${this.escapeJs(sub.name)}')">解绑</button>
             </div>
           </div>
         `;
@@ -516,6 +522,14 @@ class SubscriptionManager {
 
         if (response.ok) {
           this.showMessage("节点列表添加成功！", "success");
+          // 自动绑定到当前分组
+          if (this.currentGroupId && result.data && result.data.id) {
+            await fetch(`/api/groups/${this.currentGroupId}/subscriptions`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ subscriptionId: result.data.id }),
+            });
+          }
           document.getElementById("addForm").reset();
           closeModal("addModal");
           this.loadSubscriptions();
@@ -542,6 +556,14 @@ class SubscriptionManager {
 
       if (response.ok) {
         this.showMessage("订阅添加成功！", "success");
+        // 自动绑定到当前分组
+        if (this.currentGroupId && result.data && result.data.id) {
+          await fetch(`/api/groups/${this.currentGroupId}/subscriptions`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ subscriptionId: result.data.id }),
+          });
+        }
         document.getElementById("addForm").reset();
         closeModal("addModal");
         this.loadSubscriptions();
@@ -876,9 +898,330 @@ class ConfigManager {
   }
 }
 
-// 初始化订阅管理器和配置管理器
+class GroupManager {
+  constructor() {
+    this.groups = [];
+    this.currentGroup = null;
+  }
+
+  async init() {
+    await this.loadGroups();
+    this.bindEvents();
+  }
+
+  bindEvents() {
+    document
+      .getElementById("groupEditForm")
+      ?.addEventListener("submit", (e) => {
+        e.preventDefault();
+        this.saveGroup();
+      });
+  }
+
+  async loadGroups() {
+    try {
+      const response = await fetch("/api/groups");
+      if (!response.ok) throw new Error("获取分组列表失败");
+      this.groups = await response.json();
+
+      this.renderGroupSelect();
+
+      // 默认选择第一个分组
+      if (this.groups.length > 0 && !this.currentGroup) {
+        await this.onGroupChange(this.groups[0].id);
+      }
+    } catch (error) {
+      console.error("加载分组失败:", error);
+    }
+  }
+
+  renderGroupSelect() {
+    const select = document.getElementById("groupSelect");
+    if (!select) return;
+
+    select.innerHTML = this.groups
+      .map(
+        (g) =>
+          `<option value="${g.id}" ${
+            this.currentGroup && this.currentGroup.id === g.id
+              ? "selected"
+              : ""
+          }>${g.name}</option>`
+      )
+      .join("");
+  }
+
+  async onGroupChange(groupId) {
+    const group = this.groups.find((g) => g.id == groupId);
+    if (!group) return;
+
+    this.currentGroup = group;
+    subscriptionManager.setGroup(group.id, group.token);
+    await subscriptionManager.loadSubscriptions();
+  }
+
+  copyGroupToken() {
+    if (!this.currentGroup) {
+      createGlobalToast("请先选择分组", "error");
+      return;
+    }
+    const url = `${window.location.origin}/${this.currentGroup.token}`;
+    navigator.clipboard
+      .writeText(url)
+      .then(() => createGlobalToast("订阅链接已复制到剪贴板", "success"))
+      .catch(() => createGlobalToast("复制失败，请手动复制", "error"));
+  }
+
+  // 分组管理弹窗
+  async renderGroupList() {
+    const container = document.getElementById("groupList");
+    if (!container) return;
+
+    if (this.groups.length === 0) {
+      container.innerHTML = '<div class="no-subscriptions">暂无分组</div>';
+      return;
+    }
+
+    container.innerHTML = this.groups
+      .map(
+        (g) => `
+        <div class="group-item">
+          <div class="group-item-info">
+            <div class="group-item-name">📁 ${this.escapeHtml(g.name)}</div>
+            <div class="group-item-token">Token: ${this.escapeHtml(g.token)}</div>
+          </div>
+          <div class="group-item-actions">
+            <button class="btn btn-primary btn-sm" onclick="groupManager.openEditGroupModal(${g.id})">编辑</button>
+            <button class="btn btn-sm btn-danger" onclick="groupManager.deleteGroup(${g.id}, '${this.escapeJs(g.name)}')">删除</button>
+          </div>
+        </div>
+      `
+      )
+      .join("");
+  }
+
+  openAddGroupModal() {
+    document.getElementById("groupEdit-id").value = "";
+    document.getElementById("groupEdit-name").value = "";
+    document.getElementById("groupEdit-token").value = "";
+    document.getElementById("groupEditTitle").textContent = "➕ 新建分组";
+    openModal("groupEditModal");
+  }
+
+  openEditGroupModal(id) {
+    const group = this.groups.find((g) => g.id == id);
+    if (!group) return;
+
+    document.getElementById("groupEdit-id").value = group.id;
+    document.getElementById("groupEdit-name").value = group.name;
+    document.getElementById("groupEdit-token").value = group.token;
+    document.getElementById("groupEditTitle").textContent = "✏️ 编辑分组";
+    openModal("groupEditModal");
+  }
+
+  generateToken() {
+    const chars =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let token = "";
+    for (let i = 0; i < 16; i++) {
+      token += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    document.getElementById("groupEdit-token").value = token;
+  }
+
+  async saveGroup() {
+    const id = document.getElementById("groupEdit-id").value;
+    const name = document.getElementById("groupEdit-name").value.trim();
+    const token = document.getElementById("groupEdit-token").value.trim();
+
+    if (!name || !token) {
+      createGlobalToast("分组名称和 Token 不能为空", "error");
+      return;
+    }
+
+    try {
+      const isEdit = !!id;
+      const url = isEdit ? `/api/groups/${id}` : "/api/groups";
+      const method = isEdit ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, token }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        createGlobalToast(isEdit ? "分组更新成功！" : "分组创建成功！", "success");
+        closeModal("groupEditModal");
+        await this.loadGroups();
+        this.renderGroupList();
+      } else {
+        createGlobalToast("操作失败：" + result.error, "error");
+      }
+    } catch (error) {
+      createGlobalToast("操作失败：" + error.message, "error");
+    }
+  }
+
+  deleteGroup(id, name) {
+    openConfirmModal(
+      "确认删除",
+      `确定要删除分组 "${name}" 吗？<br><span style='color: #666; font-size: 13px;'>分组下的订阅关联将被清除，但订阅本身不会被删除。</span>`,
+      async () => {
+        try {
+          const response = await fetch(`/api/groups/${id}`, {
+            method: "DELETE",
+          });
+          const result = await response.json();
+
+          if (response.ok) {
+            createGlobalToast("分组删除成功！", "success");
+            // 如果删除的是当前选中的分组，切换到第一个
+            if (this.currentGroup && this.currentGroup.id == id) {
+              this.currentGroup = null;
+            }
+            await this.loadGroups();
+            this.renderGroupList();
+          } else {
+            createGlobalToast("删除失败：" + result.error, "error");
+          }
+        } catch (error) {
+          createGlobalToast("删除失败：" + error.message, "error");
+        }
+      }
+    );
+  }
+
+  // 绑定订阅弹窗
+  async openAttachModal() {
+    if (!this.currentGroup) {
+      createGlobalToast("请先选择分组", "error");
+      return;
+    }
+
+    const container = document.getElementById("attachSubList");
+    container.innerHTML = '<div class="loading">加载中...</div>';
+    openModal("attachSubModal");
+
+    try {
+      // 获取所有订阅和当前分组的订阅
+      const [allResponse, groupResponse] = await Promise.all([
+        fetch("/api/subscriptions"),
+        fetch(`/api/groups/${this.currentGroup.id}/subscriptions`),
+      ]);
+
+      const allSubs = await allResponse.json();
+      const groupSubs = await groupResponse.json();
+      const groupSubIds = new Set(groupSubs.map((s) => s.id));
+
+      // 筛选出未绑定的订阅
+      const unbound = allSubs.filter((s) => !groupSubIds.has(s.id));
+
+      if (unbound.length === 0) {
+        container.innerHTML =
+          '<div class="no-subscriptions">所有订阅都已绑定到当前分组</div>';
+        return;
+      }
+
+      container.innerHTML = unbound
+        .map(
+          (sub) => `
+          <div class="attach-sub-item">
+            <div class="attach-sub-info">
+              <span class="attach-sub-name">${this.escapeHtml(sub.name)}</span>
+              <span class="attach-sub-type">${sub.type === "list" ? "节点列表" : "订阅"}</span>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="groupManager.attachSubscription(${sub.id}, '${this.escapeJs(sub.name)}')">
+              绑定
+            </button>
+          </div>
+        `
+        )
+        .join("");
+    } catch (error) {
+      container.innerHTML =
+        '<div class="error">加载失败: ' + error.message + "</div>";
+    }
+  }
+
+  async attachSubscription(subscriptionId, name) {
+    if (!this.currentGroup) return;
+
+    try {
+      const response = await fetch(
+        `/api/groups/${this.currentGroup.id}/subscriptions`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subscriptionId }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (response.ok) {
+        createGlobalToast(`"${name}" 已绑定到当前分组`, "success");
+        closeModal("attachSubModal");
+        await subscriptionManager.loadSubscriptions();
+      } else {
+        createGlobalToast("绑定失败：" + result.error, "error");
+      }
+    } catch (error) {
+      createGlobalToast("绑定失败：" + error.message, "error");
+    }
+  }
+
+  detachSubscription(subscriptionId, name) {
+    if (!this.currentGroup) return;
+
+    openConfirmModal(
+      "确认解绑",
+      `确定要从当前分组中解绑订阅 "${name}" 吗？<br><span style='color: #666; font-size: 13px;'>订阅本身不会被删除，可以重新绑定。</span>`,
+      async () => {
+        try {
+          const response = await fetch(
+            `/api/groups/${this.currentGroup.id}/subscriptions/${subscriptionId}`,
+            { method: "DELETE" }
+          );
+          const result = await response.json();
+
+          if (response.ok) {
+            createGlobalToast(`"${name}" 已从当前分组解绑`, "success");
+            await subscriptionManager.loadSubscriptions();
+          } else {
+            createGlobalToast("解绑失败：" + result.error, "error");
+          }
+        } catch (error) {
+          createGlobalToast("解绑失败：" + error.message, "error");
+        }
+      }
+    );
+  }
+
+  escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  escapeJs(text) {
+    return text
+      .replace(/\\/g, "\\\\")
+      .replace(/\r/g, "\\r")
+      .replace(/\n/g, "\\n")
+      .replace(/'/g, "\\'")
+      .replace(/"/g, '\\"');
+  }
+}
+
+// 初始化订阅管理器、配置管理器和分组管理器
 const subscriptionManager = new SubscriptionManager();
+subscriptionManager.init();
 const configManager = new ConfigManager();
+const groupManager = new GroupManager();
+groupManager.init();
 
 // 检查登录状态
 async function checkAuthStatus() {
@@ -960,6 +1303,11 @@ function closeModal(modalId) {
 function openConfigModal() {
   configManager.loadConfig();
   openModal("configModal");
+}
+
+function openGroupManageModal() {
+  groupManager.renderGroupList();
+  openModal("groupManageModal");
 }
 function openAddModal() {
   document.getElementById("addForm").reset();

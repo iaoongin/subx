@@ -6,7 +6,9 @@ class Database {
     this.dataFile = path.join(__dirname, "data", "config.json");
     // 初始化空数据结构，实际配置将从 config.json 或默认值加载
     this.data = {
+      groups: [],
       subscriptions: [],
+      groupSubscriptions: [],
       nextId: 1,
       config: {
         token: "",
@@ -38,6 +40,7 @@ class Database {
     }
 
     this.loadData();
+    this.migrateGroups();
     console.log("JSON数据库初始化完成");
   }
 
@@ -99,6 +102,48 @@ class Database {
     }
   }
 
+  // 分组数据迁移：若 groups 不存在，创建默认分组并关联所有订阅
+  migrateGroups() {
+    if (Array.isArray(this.data.groups) && this.data.groups.length > 0) {
+      // 确保 groupSubscriptions 数组存在
+      if (!Array.isArray(this.data.groupSubscriptions)) {
+        this.data.groupSubscriptions = [];
+        this.saveData();
+      }
+      return;
+    }
+
+    console.log("分组迁移: 创建默认分组并关联所有订阅");
+
+    const defaultToken = this.data.config.token || "subx123";
+    const now = new Date().toISOString();
+    const defaultGroup = {
+      id: this.data.nextId++,
+      name: "默认分组",
+      token: defaultToken,
+      created_at: now,
+      updated_at: now,
+    };
+
+    this.data.groups = [defaultGroup];
+    this.data.groupSubscriptions = [];
+
+    // 将所有现有订阅关联到默认分组
+    if (Array.isArray(this.data.subscriptions)) {
+      for (const sub of this.data.subscriptions) {
+        this.data.groupSubscriptions.push({
+          groupId: defaultGroup.id,
+          subscriptionId: sub.id,
+        });
+      }
+    }
+
+    this.saveData();
+    console.log(
+      `分组迁移完成: 默认分组 id=${defaultGroup.id}, 关联 ${this.data.groupSubscriptions.length} 个订阅`
+    );
+  }
+
   saveData() {
     try {
       fs.writeFileSync(
@@ -115,40 +160,55 @@ class Database {
 
   createDefaultData() {
     // 创建默认数据结构，不包含敏感信息
+    const now = new Date().toISOString();
     this.data = {
-      subscriptions: [
+      groups: [
         {
           id: 1,
+          name: "默认分组",
+          token: "subx123",
+          created_at: now,
+          updated_at: now,
+        },
+      ],
+      subscriptions: [
+        {
+          id: 2,
           name: "示例订阅1",
           type: "subscription",
           url: "https://example.com/api/v1/client/subscribe?token=YOUR_TOKEN_HERE",
           description: "示例订阅链接1",
           active: 1,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          created_at: now,
+          updated_at: now,
         },
         {
-          id: 2,
+          id: 3,
           name: "示例订阅2",
           type: "subscription",
           url: "https://example.com/api/v1/client/subscribe?token=YOUR_TOKEN_HERE_2",
           description: "示例订阅链接2",
           active: 1,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          created_at: now,
+          updated_at: now,
         },
         {
-          id: 3,
+          id: 4,
           name: "示例订阅3",
           type: "subscription",
           url: "https://example.com/share/example/config-id/speed.yaml",
           description: "示例订阅链接3",
           active: 1,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          created_at: now,
+          updated_at: now,
         },
       ],
-      nextId: 4,
+      groupSubscriptions: [
+        { groupId: 1, subscriptionId: 2 },
+        { groupId: 1, subscriptionId: 3 },
+        { groupId: 1, subscriptionId: 4 },
+      ],
+      nextId: 5,
       config: {
         token: "subx123",
         botToken: "",
@@ -261,7 +321,7 @@ class Database {
     });
   }
 
-  // 删除订阅地址
+  // 删除订阅地址（同时清理所有分组关联）
   deleteSubscription(id) {
     return new Promise((resolve, reject) => {
       const index = this.data.subscriptions.findIndex((sub) => sub.id == id);
@@ -271,6 +331,13 @@ class Database {
       }
 
       this.data.subscriptions.splice(index, 1);
+
+      // 级联清理所有分组关联
+      if (Array.isArray(this.data.groupSubscriptions)) {
+        this.data.groupSubscriptions = this.data.groupSubscriptions.filter(
+          (gs) => gs.subscriptionId != id
+        );
+      }
 
       if (this.saveData()) {
         resolve({ changes: 1 });
@@ -398,6 +465,218 @@ class Database {
         }
       } catch (error) {
         reject(error);
+      }
+    });
+  }
+
+  // ========================= 分组管理方法 =========================
+
+  // 获取所有分组
+  getGroups() {
+    this.loadData();
+    return new Promise((resolve) => {
+      resolve([...(this.data.groups || [])]);
+    });
+  }
+
+  // 根据 token 获取分组
+  getGroupByToken(token) {
+    this.loadData();
+    return new Promise((resolve) => {
+      const group = (this.data.groups || []).find((g) => g.token === token);
+      resolve(group || null);
+    });
+  }
+
+  // 添加分组
+  addGroup(name, token) {
+    return new Promise((resolve, reject) => {
+      // token 必须唯一
+      const exists = (this.data.groups || []).find((g) => g.token === token);
+      if (exists) {
+        reject(new Error("该 Token 已被其他分组使用"));
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const newGroup = {
+        id: this.data.nextId++,
+        name,
+        token,
+        created_at: now,
+        updated_at: now,
+      };
+
+      if (!Array.isArray(this.data.groups)) {
+        this.data.groups = [];
+      }
+      this.data.groups.push(newGroup);
+
+      if (this.saveData()) {
+        resolve(newGroup);
+      } else {
+        reject(new Error("保存数据失败"));
+      }
+    });
+  }
+
+  // 更新分组
+  updateGroup(id, name, token) {
+    return new Promise((resolve, reject) => {
+      const index = (this.data.groups || []).findIndex((g) => g.id == id);
+      if (index === -1) {
+        resolve({ changes: 0 });
+        return;
+      }
+
+      // token 唯一性检查（排除自身）
+      const tokenConflict = (this.data.groups || []).find(
+        (g) => g.token === token && g.id != id
+      );
+      if (tokenConflict) {
+        reject(new Error("该 Token 已被其他分组使用"));
+        return;
+      }
+
+      const current = this.data.groups[index];
+      this.data.groups[index] = {
+        ...current,
+        name,
+        token,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (this.saveData()) {
+        resolve({ changes: 1, group: this.data.groups[index] });
+      } else {
+        reject(new Error("保存数据失败"));
+      }
+    });
+  }
+
+  // 删除分组（级联删除关联关系）
+  deleteGroup(id) {
+    return new Promise((resolve, reject) => {
+      const index = (this.data.groups || []).findIndex((g) => g.id == id);
+      if (index === -1) {
+        resolve({ changes: 0 });
+        return;
+      }
+
+      this.data.groups.splice(index, 1);
+
+      // 级联删除该分组下的所有关联
+      if (Array.isArray(this.data.groupSubscriptions)) {
+        this.data.groupSubscriptions = this.data.groupSubscriptions.filter(
+          (gs) => gs.groupId != id
+        );
+      }
+
+      if (this.saveData()) {
+        resolve({ changes: 1 });
+      } else {
+        reject(new Error("保存数据失败"));
+      }
+    });
+  }
+
+  // 获取分组下的订阅列表（通过关联表）
+  getSubscriptionsByGroup(groupId) {
+    this.loadData();
+    return new Promise((resolve) => {
+      const relatedIds = (this.data.groupSubscriptions || [])
+        .filter((gs) => gs.groupId == groupId)
+        .map((gs) => gs.subscriptionId);
+
+      const subscriptions = (this.data.subscriptions || []).filter((sub) =>
+        relatedIds.includes(sub.id)
+      );
+
+      resolve(subscriptions);
+    });
+  }
+
+  // 获取分组下活跃的订阅列表
+  getActiveSubscriptionsByGroup(groupId) {
+    this.loadData();
+    return new Promise((resolve) => {
+      const relatedIds = (this.data.groupSubscriptions || [])
+        .filter((gs) => gs.groupId == groupId)
+        .map((gs) => gs.subscriptionId);
+
+      const subscriptions = (this.data.subscriptions || []).filter(
+        (sub) => relatedIds.includes(sub.id) && sub.active === 1
+      );
+
+      resolve(subscriptions);
+    });
+  }
+
+  // 绑定订阅到分组
+  attachSubscriptionToGroup(groupId, subscriptionId) {
+    return new Promise((resolve, reject) => {
+      // 验证分组和订阅存在
+      const groupExists = (this.data.groups || []).some((g) => g.id == groupId);
+      if (!groupExists) {
+        reject(new Error("分组不存在"));
+        return;
+      }
+      const subExists = (this.data.subscriptions || []).some(
+        (s) => s.id == subscriptionId
+      );
+      if (!subExists) {
+        reject(new Error("订阅不存在"));
+        return;
+      }
+
+      // 检查关联是否已存在
+      if (!Array.isArray(this.data.groupSubscriptions)) {
+        this.data.groupSubscriptions = [];
+      }
+      const exists = this.data.groupSubscriptions.some(
+        (gs) => gs.groupId == groupId && gs.subscriptionId == subscriptionId
+      );
+      if (exists) {
+        reject(new Error("该订阅已关联到此分组"));
+        return;
+      }
+
+      this.data.groupSubscriptions.push({
+        groupId: Number(groupId),
+        subscriptionId: Number(subscriptionId),
+      });
+
+      if (this.saveData()) {
+        resolve({ success: true });
+      } else {
+        reject(new Error("保存数据失败"));
+      }
+    });
+  }
+
+  // 从分组中解绑订阅
+  detachSubscriptionFromGroup(groupId, subscriptionId) {
+    return new Promise((resolve, reject) => {
+      if (!Array.isArray(this.data.groupSubscriptions)) {
+        resolve({ changes: 0 });
+        return;
+      }
+
+      const before = this.data.groupSubscriptions.length;
+      this.data.groupSubscriptions = this.data.groupSubscriptions.filter(
+        (gs) => !(gs.groupId == groupId && gs.subscriptionId == subscriptionId)
+      );
+      const after = this.data.groupSubscriptions.length;
+
+      if (before === after) {
+        resolve({ changes: 0 });
+        return;
+      }
+
+      if (this.saveData()) {
+        resolve({ changes: 1 });
+      } else {
+        reject(new Error("保存数据失败"));
       }
     });
   }

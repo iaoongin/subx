@@ -14,6 +14,9 @@
       <h1>🚀 SubX 订阅管理</h1>
       <p>轻松管理您的订阅链接，支持实时添加、编辑和删除</p>
       <div class="header-actions">
+        <button class="header-action-btn" onclick="openGroupManageModal()">
+          📁 分组管理
+        </button>
         <button class="header-action-btn" onclick="openConfigModal()">
           ⚙️ 系统配置
         </button>
@@ -45,6 +48,19 @@
     </div>
 
     <div class="subscriptions-section">
+      <div class="group-selector-bar">
+        <div class="group-selector-left">
+          <label for="groupSelect">📁 当前分组：</label>
+          <select id="groupSelect" onchange="groupManager.onGroupChange(this.value)">
+            <option value="">加载中...</option>
+          </select>
+        </div>
+        <div class="group-selector-right">
+          <button class="group-token-btn" onclick="groupManager.copyGroupToken()" title="复制当前分组的订阅链接">
+            🔗 复制订阅链接
+          </button>
+        </div>
+      </div>
       <div class="section-header">
         <h2>📋 订阅列表</h2>
         <div style="display: flex; gap: 10px;">
@@ -59,6 +75,9 @@
           </button>
           <button class="section-action-btn" onclick="openAddModal()">
             ➕ 添加订阅
+          </button>
+          <button class="section-action-btn" onclick="groupManager.openAttachModal()">
+            🔗 绑定订阅
           </button>
         </div>
       </div>
@@ -244,6 +263,95 @@
         </button>
         <button type="button" class="btn-modal btn-modal-primary" id="confirmBtn">
           确定
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 分组管理模态框 -->
+  <div id="groupManageModal" class="modal">
+    <div class="modal-content" style="max-width: 700px;">
+      <div class="modal-header">
+        <h2 class="modal-title">📁 分组管理</h2>
+        <button class="close" onclick="closeModal('groupManageModal')">
+          &times;
+        </button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+          <button class="section-action-btn" onclick="groupManager.openAddGroupModal()">
+            ➕ 新建分组
+          </button>
+        </div>
+        <div id="groupList" class="group-list">
+          <div class="loading">正在加载分组列表...</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal btn-modal-secondary" onclick="closeModal('groupManageModal')">
+          关闭
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新建/编辑分组模态框 -->
+  <div id="groupEditModal" class="modal">
+    <div class="modal-content" style="max-width: 450px;">
+      <div class="modal-header">
+        <h2 class="modal-title" id="groupEditTitle">➕ 新建分组</h2>
+        <button class="close" onclick="closeModal('groupEditModal')">
+          &times;
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="groupEditForm" class="modal-form">
+          <input type="hidden" id="groupEdit-id" />
+          <div class="form-group">
+            <label for="groupEdit-name">分组名称 *</label>
+            <input type="text" id="groupEdit-name" required placeholder="请输入分组名称" />
+          </div>
+          <div class="form-group">
+            <label for="groupEdit-token">Token *</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="groupEdit-token" required placeholder="请输入访问令牌" style="flex: 1;" />
+              <button type="button" class="btn btn-primary btn-sm" onclick="groupManager.generateToken()" style="white-space: nowrap;">
+                随机生成
+              </button>
+            </div>
+            <div class="form-help">Token 必须唯一，用于订阅链接访问</div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal btn-modal-secondary" onclick="closeModal('groupEditModal')">
+          取消
+        </button>
+        <button type="submit" form="groupEditForm" class="btn-modal btn-modal-primary">
+          保存
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 绑定订阅模态框 -->
+  <div id="attachSubModal" class="modal">
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2 class="modal-title">🔗 绑定订阅到分组</h2>
+        <button class="close" onclick="closeModal('attachSubModal')">
+          &times;
+        </button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom: 15px; color: #666;">选择要绑定到当前分组的订阅：</p>
+        <div id="attachSubList" class="attach-sub-list">
+          <div class="loading">加载中...</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal btn-modal-secondary" onclick="closeModal('attachSubModal')">
+          关闭
         </button>
       </div>
     </div>
