@@ -747,7 +747,7 @@ class ConfigManager {
       config.fileName || "";
     document.getElementById("modal-subUpdateTime").value =
       config.subUpdateTime || 6;
-    document.getElementById("modal-total").value = config.total || 0;
+    document.getElementById("modal-total").value = config.total ?? 0;
     document.getElementById("modal-botToken").value =
       config.botToken || "";
     document.getElementById("modal-chatId").value = config.chatId || "";
@@ -763,7 +763,10 @@ class ConfigManager {
       subUpdateTime:
         parseInt(document.getElementById("modal-subUpdateTime").value) ||
         6,
-      total: parseInt(document.getElementById("modal-total").value) || 0,
+      total:
+        document.getElementById("modal-total").value === ""
+          ? 0
+          : parseInt(document.getElementById("modal-total").value, 10) || 0,
       botToken: document.getElementById("modal-botToken").value.trim(),
       chatId: document.getElementById("modal-chatId").value.trim(),
       adminPassword: document
