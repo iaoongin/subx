@@ -8,6 +8,8 @@
     "start": "node index.js",
     "start:daemon": "start /B node index.js > logs\\server.log 2>&1",
     "stop": "taskkill /F /IM node.exe 2>nul || echo No running node process",
+    "commitmsg:check": "node scripts/validate-commit-msg.js",
+    "hooks:install": "git config core.hooksPath .githooks",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

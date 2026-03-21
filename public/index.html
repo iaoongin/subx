@@ -4,113 +4,183 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SubX 订阅管理</title>
+  <title>SubX 订阅工作台</title>
   <link rel="stylesheet" href="index.css">
 </head>
 
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>🚀 SubX 订阅管理</h1>
-      <p>轻松管理您的订阅链接，支持实时添加、编辑和删除</p>
-      <div class="header-actions">
-        <button class="header-action-btn" onclick="openGroupManageModal()">
-          📁 分组管理
-        </button>
-        <button class="header-action-btn" onclick="openConfigModal()">
-          ⚙️ 系统配置
-        </button>
-        <button class="logout-btn" onclick="logout()">🚪 登出</button>
+  <div class="app-shell">
+    <header class="hero-panel">
+      <div class="hero-copy">
+        <h1>SubX 订阅工作台</h1>
+        <p>轻松管理您的订阅链接，支持实时添加、编辑和删除</p>
       </div>
-    </div>
+      <div class="hero-actions">
+        <button type="button" class="hero-btn hero-btn-secondary" onclick="openGroupManageModal()">
+          管理分组
+        </button>
+        <button type="button" class="hero-btn hero-btn-secondary" onclick="openConfigModal()">
+          系统配置
+        </button>
+        <button type="button" class="hero-btn hero-btn-ghost" onclick="logout()">
+          退出登录
+        </button>
+      </div>
+    </header>
 
-
-
-    <div class="stats">
-      <div class="stat-card">
+    <section class="stats">
+      <article class="stat-card">
+        <span class="stat-kicker">当前分组</span>
         <div class="stat-number" id="totalCount">0</div>
-        <div class="stat-label">总订阅数</div>
-      </div>
-      <div class="stat-card">
+        <div class="stat-label">订阅总数</div>
+      </article>
+      <article class="stat-card">
+        <span class="stat-kicker">可用状态</span>
         <div class="stat-number" id="activeCount">0</div>
-        <div class="stat-label">活跃订阅</div>
-      </div>
-      <div class="stat-card">
+        <div class="stat-label">已启用</div>
+      </article>
+      <article class="stat-card">
+        <span class="stat-kicker">需要处理</span>
         <div class="stat-number" id="inactiveCount">0</div>
-        <div class="stat-label">已禁用</div>
-      </div>
-    </div>
+        <div class="stat-label">已停用</div>
+      </article>
+    </section>
 
-    <div class="action-buttons">
-      <button class="action-btn action-btn-config" onclick="openConfigModal()">
-        ⚙️ 系统配置
-      </button>
-    </div>
+    <main class="workspace-layout">
+      <aside class="workspace-sidebar">
+        <section class="context-card">
+          <div class="panel-heading">
+            <div>
+              <h2>当前分组</h2>
+              <p>先确认你正在操作哪个订阅集合。</p>
+            </div>
+          </div>
 
-    <div class="subscriptions-section">
-      <div class="group-selector-bar">
-        <div class="group-selector-left">
-          <label for="groupSelect">📁 当前分组：</label>
-          <select id="groupSelect" onchange="groupManager.onGroupChange(this.value)">
-            <option value="">加载中...</option>
-          </select>
+          <div class="field-stack">
+            <label class="field-label" for="groupSelect">选择分组</label>
+            <select id="groupSelect" onchange="groupManager.onGroupChange(this.value)">
+              <option value="">加载中...</option>
+            </select>
+          </div>
+
+          <div class="group-summary">
+            <div class="group-summary-header">
+              <div>
+                <strong id="selectedGroupName">未选择分组</strong>
+                <p id="selectedGroupHint">选择一个分组后，这里会展示该分组的订阅地址和统计信息。</p>
+              </div>
+              <span id="selectedGroupStatus" class="status-chip">未连接</span>
+            </div>
+
+            <div class="field-stack">
+              <label class="field-label" for="selectedGroupLink">订阅地址</label>
+              <div class="inline-field">
+                <input id="selectedGroupLink" type="text" readonly placeholder="选择分组后自动生成" />
+                <button type="button" class="inline-copy-btn" data-group-required onclick="groupManager.copyGroupToken()">
+                  复制
+                </button>
+              </div>
+            </div>
+
+            <div class="group-meta">
+              <span id="selectedGroupToken">Token: --</span>
+              <span id="selectedGroupCount">0 条订阅</span>
+            </div>
+          </div>
+
+          <div class="sidebar-actions">
+            <button type="button" class="section-action-btn" data-group-required onclick="subscriptionManager.previewSubscription()">
+              预览订阅
+            </button>
+            <button type="button" class="section-action-btn section-action-btn-muted" data-group-required onclick="subscriptionManager.refreshSubscription()">
+              刷新缓存
+            </button>
+            <button type="button" class="section-action-btn section-action-btn-muted" data-group-required onclick="subscriptionManager.refreshUsage()">
+              刷新流量
+            </button>
+          </div>
+        </section>
+
+        <section class="context-card">
+          <div class="panel-heading">
+            <div>
+              <h2>分组内操作</h2>
+              <p>新增订阅会自动绑定到当前分组，已有订阅也可以快速挂载进来。</p>
+            </div>
+          </div>
+          <div class="sidebar-actions stacked">
+            <button type="button" class="section-action-btn" data-group-required onclick="openAddModal()">
+              新建订阅
+            </button>
+            <button type="button" class="section-action-btn section-action-btn-outline" data-group-required onclick="groupManager.openAttachModal()">
+              绑定已有订阅
+            </button>
+          </div>
+        </section>
+      </aside>
+
+      <section class="subscriptions-section">
+        <div class="section-header">
+          <div>
+            <h2>订阅列表</h2>
+            <p class="section-subtitle">只展示当前分组中的订阅，并支持按关键词、状态和类型筛选。</p>
+          </div>
+          <div class="results-pill">
+            <span id="filteredCount">0</span>
+            <span class="results-separator">/</span>
+            <span id="visibleTotalCount">0</span>
+          </div>
         </div>
-        <div class="group-selector-right">
-          <button class="group-token-btn" onclick="groupManager.copyGroupToken()" title="复制当前分组的订阅链接">
-            🔗 复制订阅链接
-          </button>
+
+        <div class="subscriptions-toolbar">
+          <label class="search-field" for="subscriptionSearch">
+            <span>搜索</span>
+            <input id="subscriptionSearch" type="search" placeholder="按名称、描述或链接筛选" />
+          </label>
+
+          <div class="toolbar-filters">
+            <div class="filter-chip-group">
+              <button type="button" class="filter-chip is-active" data-status-filter="all">全部</button>
+              <button type="button" class="filter-chip" data-status-filter="active">启用中</button>
+              <button type="button" class="filter-chip" data-status-filter="inactive">已停用</button>
+            </div>
+
+            <select id="subscriptionTypeFilter">
+              <option value="all">全部类型</option>
+              <option value="subscription">订阅链接</option>
+              <option value="list">节点列表</option>
+            </select>
+          </div>
         </div>
-      </div>
-      <div class="section-header">
-        <h2>📋 订阅列表</h2>
-        <div style="display: flex; gap: 10px;">
-          <button class="section-action-btn" onclick="subscriptionManager.previewSubscription()">
-            👀 预览订阅
-          </button>
-          <button class="section-action-btn" onclick="subscriptionManager.refreshSubscription()">
-            🔄 刷新缓存
-          </button>
-          <button class="section-action-btn" onclick="subscriptionManager.refreshUsage()">
-            刷新流量
-          </button>
-          <button class="section-action-btn" onclick="openAddModal()">
-            ➕ 添加订阅
-          </button>
-          <button class="section-action-btn" onclick="groupManager.openAttachModal()">
-            🔗 绑定订阅
-          </button>
+
+        <div id="subscriptionsList">
+          <div class="loading">正在加载订阅列表...</div>
         </div>
-      </div>
-      <div id="subscriptionsList">
-        <div class="loading">正在加载订阅列表...</div>
-      </div>
-    </div>
+      </section>
+    </main>
   </div>
 
-  <!-- 系统配置模态框 -->
   <div id="configModal" class="modal">
-    <div class="modal-content">
+    <div class="modal-content modal-content-wide">
       <div class="modal-header">
-        <h2 class="modal-title">⚙️ 系统配置</h2>
-        <button class="close" onclick="closeModal('configModal')">
-          &times;
-        </button>
+        <h2 class="modal-title">系统配置</h2>
+        <button type="button" class="close" onclick="closeModal('configModal')">&times;</button>
       </div>
       <div class="modal-body">
         <form id="configForm" class="modal-form">
           <div class="form-grid">
             <div class="form-group">
-              <label for="modal-token">访问令牌 (Token) *</label>
+              <label for="modal-token">访问 Token *</label>
               <input type="text" id="modal-token" required />
             </div>
             <div class="form-group">
-              <label for="modal-fileName">文件名称 (FileName) *</label>
+              <label for="modal-fileName">文件名 *</label>
               <input type="text" id="modal-fileName" required />
             </div>
             <div class="form-group">
               <label for="modal-defaultPreviewFormat">默认预览格式</label>
               <select id="modal-defaultPreviewFormat">
-                <option value="ss">SS (默认)</option>
+                <option value="ss">SS</option>
                 <option value="clash">Clash</option>
               </select>
             </div>
@@ -119,7 +189,7 @@
               <input type="number" id="modal-subUpdateTime" min="1" max="168" required />
             </div>
             <div class="form-group">
-              <label for="modal-total">总流量 (TB)</label>
+              <label for="modal-total">总流量（TB）</label>
               <input type="number" id="modal-total" min="0" required />
             </div>
             <div class="form-group">
@@ -131,20 +201,20 @@
               <input type="text" id="modal-chatId" placeholder="可选" />
             </div>
             <div class="form-group">
-              <label for="modal-adminPassword">管理员密码</label>
+              <label for="modal-adminPassword">管理员密码 *</label>
               <input type="password" id="modal-adminPassword" required />
             </div>
             <div class="form-group full-width">
-              <label for="modal-extensionScriptEditor">扩展脚本（整合订阅）</label>
+              <label for="modal-extensionScriptEditor">扩展脚本</label>
               <div id="modal-extensionScriptEditor" class="code-editor-ace"></div>
-              <div class="form-help">脚本必须定义: <code>main(config, profileName)</code></div>
+              <div class="form-help">脚本必须暴露 `main(config, profileName)` 方法。</div>
             </div>
           </div>
         </form>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn-modal btn-modal-secondary" onclick="configManager.resetConfig()">
-          重置默认值
+          恢复默认
         </button>
         <button type="button" class="btn-modal btn-modal-secondary" onclick="closeModal('configModal')">
           取消
@@ -156,14 +226,11 @@
     </div>
   </div>
 
-  <!-- 添加订阅模态框 -->
   <div id="addModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
-        <h2 class="modal-title">➕ 添加新订阅</h2>
-        <button class="close" onclick="closeModal('addModal')">
-          &times;
-        </button>
+        <h2 class="modal-title" id="addModalTitle">新建订阅</h2>
+        <button type="button" class="close" onclick="closeModal('addModal')">&times;</button>
       </div>
       <div class="modal-body">
         <form id="addForm" class="modal-form">
@@ -175,17 +242,17 @@
             </select>
           </div>
           <div class="form-group">
-            <label for="modal-name">名称 *</label>
-            <input type="text" id="modal-name" required placeholder="请输入名称" />
+            <label for="modal-name" id="modal-name-label">名称 *</label>
+            <input type="text" id="modal-name" required placeholder="例如：机场 A" />
           </div>
           <div class="form-group">
-            <label for="modal-url">订阅链接 *</label>
-            <textarea id="modal-url" required rows="3" placeholder="https://example.com/subscribe"></textarea>
-            <div id="modal-url-help" class="form-help">仅支持单条订阅链接</div>
+            <label for="modal-url" id="modal-url-label">订阅链接 *</label>
+            <textarea id="modal-url" required rows="4" placeholder="https://example.com/subscribe"></textarea>
+            <div id="modal-url-help" class="form-help">仅支持单条订阅链接。</div>
           </div>
           <div class="form-group">
-            <label for="modal-description">描述</label>
-            <textarea id="modal-description" placeholder="请输入订阅描述（可选）"></textarea>
+            <label for="modal-description">备注</label>
+            <textarea id="modal-description" placeholder="写一点描述，方便后续识别"></textarea>
           </div>
         </form>
       </div>
@@ -194,20 +261,17 @@
           取消
         </button>
         <button type="submit" form="addForm" class="btn-modal btn-modal-primary">
-          添加订阅
+          保存并绑定
         </button>
       </div>
     </div>
   </div>
 
-  <!-- 编辑订阅模态框 -->
   <div id="editModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
-        <h2 class="modal-title">✏️ 编辑订阅</h2>
-        <button class="close" onclick="closeModal('editModal')">
-          &times;
-        </button>
+        <h2 class="modal-title" id="editModalTitle">编辑订阅</h2>
+        <button type="button" class="close" onclick="closeModal('editModal')">&times;</button>
       </div>
       <div class="modal-body">
         <form id="editForm" class="modal-form">
@@ -220,16 +284,16 @@
             </select>
           </div>
           <div class="form-group">
-            <label for="edit-name">名称 *</label>
+            <label for="edit-name" id="edit-name-label">名称 *</label>
             <input type="text" id="edit-name" required />
           </div>
           <div class="form-group">
-            <label for="edit-url">订阅链接 *</label>
-            <textarea id="edit-url" required rows="3"></textarea>
-            <div id="edit-url-help" class="form-help">仅支持单条订阅链接</div>
+            <label for="edit-url" id="edit-url-label">订阅链接 *</label>
+            <textarea id="edit-url" required rows="4"></textarea>
+            <div id="edit-url-help" class="form-help">仅支持单条订阅链接。</div>
           </div>
           <div class="form-group">
-            <label for="edit-description">描述</label>
+            <label for="edit-description">备注</label>
             <textarea id="edit-description"></textarea>
           </div>
         </form>
@@ -245,42 +309,36 @@
     </div>
   </div>
 
-  <!-- 通用确认模态框 -->
   <div id="confirmModal" class="modal">
-    <div class="modal-content" style="max-width: 400px;">
+    <div class="modal-content modal-content-compact">
       <div class="modal-header">
-        <h2 class="modal-title" id="confirmTitle">确认</h2>
-        <button class="close" onclick="closeModal('confirmModal')">
-          &times;
-        </button>
+        <h2 class="modal-title" id="confirmTitle">确认操作</h2>
+        <button type="button" class="close" onclick="closeModal('confirmModal')">&times;</button>
       </div>
       <div class="modal-body">
-        <p id="confirmMessage" style="font-size: 15px; color: #555; line-height: 1.6;"></p>
+        <p id="confirmMessage" class="confirm-message"></p>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn-modal btn-modal-secondary" onclick="closeModal('confirmModal')">
           取消
         </button>
         <button type="button" class="btn-modal btn-modal-primary" id="confirmBtn">
-          确定
+          确认
         </button>
       </div>
     </div>
   </div>
 
-  <!-- 分组管理模态框 -->
   <div id="groupManageModal" class="modal">
-    <div class="modal-content" style="max-width: 700px;">
+    <div class="modal-content modal-content-medium">
       <div class="modal-header">
-        <h2 class="modal-title">📁 分组管理</h2>
-        <button class="close" onclick="closeModal('groupManageModal')">
-          &times;
-        </button>
+        <h2 class="modal-title">分组管理</h2>
+        <button type="button" class="close" onclick="closeModal('groupManageModal')">&times;</button>
       </div>
       <div class="modal-body">
-        <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-          <button class="section-action-btn" onclick="groupManager.openAddGroupModal()">
-            ➕ 新建分组
+        <div class="modal-toolbar">
+          <button type="button" class="section-action-btn" onclick="groupManager.openAddGroupModal()">
+            新建分组
           </button>
         </div>
         <div id="groupList" class="group-list">
@@ -295,31 +353,28 @@
     </div>
   </div>
 
-  <!-- 新建/编辑分组模态框 -->
   <div id="groupEditModal" class="modal">
-    <div class="modal-content" style="max-width: 450px;">
+    <div class="modal-content">
       <div class="modal-header">
-        <h2 class="modal-title" id="groupEditTitle">➕ 新建分组</h2>
-        <button class="close" onclick="closeModal('groupEditModal')">
-          &times;
-        </button>
+        <h2 class="modal-title" id="groupEditTitle">新建分组</h2>
+        <button type="button" class="close" onclick="closeModal('groupEditModal')">&times;</button>
       </div>
       <div class="modal-body">
         <form id="groupEditForm" class="modal-form">
           <input type="hidden" id="groupEdit-id" />
           <div class="form-group">
             <label for="groupEdit-name">分组名称 *</label>
-            <input type="text" id="groupEdit-name" required placeholder="请输入分组名称" />
+            <input type="text" id="groupEdit-name" required placeholder="例如：主力分组" />
           </div>
           <div class="form-group">
             <label for="groupEdit-token">Token *</label>
-            <div style="display: flex; gap: 8px;">
-              <input type="text" id="groupEdit-token" required placeholder="请输入访问令牌" style="flex: 1;" />
-              <button type="button" class="btn btn-primary btn-sm" onclick="groupManager.generateToken()" style="white-space: nowrap;">
+            <div class="token-row">
+              <input type="text" id="groupEdit-token" required placeholder="请输入访问 Token" />
+              <button type="button" class="btn btn-primary btn-sm" onclick="groupManager.generateToken()">
                 随机生成
               </button>
             </div>
-            <div class="form-help">Token 必须唯一，用于订阅链接访问</div>
+            <div class="form-help">Token 需要唯一，用于生成分组订阅地址。</div>
           </div>
         </form>
       </div>
@@ -334,19 +389,16 @@
     </div>
   </div>
 
-  <!-- 绑定订阅模态框 -->
   <div id="attachSubModal" class="modal">
-    <div class="modal-content" style="max-width: 500px;">
+    <div class="modal-content modal-content-medium">
       <div class="modal-header">
-        <h2 class="modal-title">🔗 绑定订阅到分组</h2>
-        <button class="close" onclick="closeModal('attachSubModal')">
-          &times;
-        </button>
+        <h2 class="modal-title">绑定已有订阅</h2>
+        <button type="button" class="close" onclick="closeModal('attachSubModal')">&times;</button>
       </div>
       <div class="modal-body">
-        <p style="margin-bottom: 15px; color: #666;">选择要绑定到当前分组的订阅：</p>
+        <p class="modal-description">选择需要加入当前分组的订阅，系统不会重复绑定。</p>
         <div id="attachSubList" class="attach-sub-list">
-          <div class="loading">加载中...</div>
+          <div class="loading">正在加载可绑定的订阅...</div>
         </div>
       </div>
       <div class="modal-footer">

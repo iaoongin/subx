@@ -1,43 +1,27 @@
-// 全局 Loading 控制
 let loadingRequestCount = 0;
 
-function showLoading() {
-  loadingRequestCount++;
-  const overlay = document.getElementById('loadingOverlay');
-  if (overlay && loadingRequestCount > 0) {
-    overlay.classList.add('visible');
-  }
+const DEFAULT_EXTENSION_SCRIPT = `function main(config, profileName) {
+  const content = JSON.parse(JSON.stringify(config));
+  return content;
 }
+`;
 
-function hideLoading() {
-  loadingRequestCount--;
-  if (loadingRequestCount < 0) loadingRequestCount = 0;
-  const overlay = document.getElementById('loadingOverlay');
-  if (overlay && loadingRequestCount === 0) {
-    overlay.classList.remove('visible');
-  }
-}
+const originalFetch = window.fetch.bind(window);
 
-// 拦截全局 fetch 请求以自动显示 Loading
-const originalFetch = window.fetch;
-window.fetch = async function (resource, init) {
-  let skipLoading = false;
-  let finalInit = init;
+window.fetch = async function wrappedFetch(resource, init = {}) {
+  const finalInit = { ...init };
+  const skipLoading = Boolean(finalInit.skipLoading);
 
-  if (init && init.skipLoading) {
-    skipLoading = true;
-    finalInit = { ...init };
+  if ("skipLoading" in finalInit) {
     delete finalInit.skipLoading;
   }
 
   if (!skipLoading) {
     showLoading();
   }
+
   try {
-    const response = await originalFetch(resource, finalInit);
-    return response;
-  } catch (error) {
-    throw error;
+    return await originalFetch(resource, finalInit);
   } finally {
     if (!skipLoading) {
       hideLoading();
@@ -45,16 +29,317 @@ window.fetch = async function (resource, init) {
   }
 };
 
-const DEFAULT_EXTENSION_SCRIPT = `function main(config, profileName) {
-  let content = JSON.parse(JSON.stringify(config));
-  return content;
+function showLoading() {
+  loadingRequestCount += 1;
+  document.getElementById("loadingOverlay")?.classList.add("visible");
 }
-`;
+
+function hideLoading() {
+  loadingRequestCount = Math.max(loadingRequestCount - 1, 0);
+  if (loadingRequestCount === 0) {
+    document.getElementById("loadingOverlay")?.classList.remove("visible");
+  }
+}
+
+function normalizeType(type) {
+  if (type === "node") return "list";
+  return type || "subscription";
+}
+
+function escapeHtml(text = "") {
+  const div = document.createElement("div");
+  div.textContent = String(text ?? "");
+  return div.innerHTML;
+}
+
+function escapeJs(text = "") {
+  return String(text ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\r/g, "\\r")
+    .replace(/\n/g, "\\n")
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '\\"');
+}
+
+function formatBytes(bytes) {
+  const value = Number(bytes) || 0;
+  if (value <= 0) return "0 B";
+
+  const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+  const exponent = Math.min(
+    Math.floor(Math.log(value) / Math.log(1024)),
+    units.length - 1
+  );
+  const result = value / 1024 ** exponent;
+  return `${result.toFixed(result >= 100 || exponent === 0 ? 0 : 2)} ${units[exponent]}`;
+}
+
+class CustomSelect {
+  static instances = new Map();
+  static openInstance = null;
+
+  static initAll(root = document) {
+    root.querySelectorAll("select").forEach((select) => {
+      if (!CustomSelect.instances.has(select)) {
+        const instance = new CustomSelect(select);
+        CustomSelect.instances.set(select, instance);
+      }
+    });
+  }
+
+  static syncById(id) {
+    const select = document.getElementById(id);
+    if (!select) return;
+    CustomSelect.instances.get(select)?.syncFromSelect();
+  }
+
+  static focusById(id) {
+    const select = document.getElementById(id);
+    if (!select) return;
+    CustomSelect.instances.get(select)?.focus();
+  }
+
+  constructor(select) {
+    this.select = select;
+    this.wrapper = null;
+    this.trigger = null;
+    this.valueNode = null;
+    this.dropdown = null;
+    this.optionsContainer = null;
+    this.optionButtons = [];
+    this.observer = null;
+
+    this.build();
+    this.bindEvents();
+    this.observe();
+    this.syncFromSelect();
+  }
+
+  build() {
+    const wrapper = document.createElement("div");
+    wrapper.className = "custom-select";
+
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "custom-select-trigger";
+    trigger.setAttribute("aria-haspopup", "listbox");
+    trigger.setAttribute("aria-expanded", "false");
+
+    const valueNode = document.createElement("span");
+    valueNode.className = "custom-select-value";
+    trigger.appendChild(valueNode);
+
+    const dropdown = document.createElement("div");
+    dropdown.className = "custom-select-dropdown";
+
+    const optionsContainer = document.createElement("div");
+    optionsContainer.className = "custom-select-options";
+    optionsContainer.setAttribute("role", "listbox");
+
+    dropdown.appendChild(optionsContainer);
+
+    this.select.classList.add("native-select-hidden");
+    this.select.parentNode.insertBefore(wrapper, this.select);
+    wrapper.append(this.select, trigger, dropdown);
+
+    this.wrapper = wrapper;
+    this.trigger = trigger;
+    this.valueNode = valueNode;
+    this.dropdown = dropdown;
+    this.optionsContainer = optionsContainer;
+  }
+
+  bindEvents() {
+    this.trigger.addEventListener("click", () => {
+      if (this.select.disabled) return;
+      this.toggle();
+    });
+
+    this.trigger.addEventListener("keydown", (event) => {
+      if (this.select.disabled) return;
+
+      if (["Enter", " ", "ArrowDown", "ArrowUp"].includes(event.key)) {
+        event.preventDefault();
+        if (!this.isOpen()) {
+          this.open();
+        }
+        this.focusSelectedOption(event.key === "ArrowUp" ? -1 : 1);
+      }
+
+      if (event.key === "Escape") {
+        this.close();
+      }
+    });
+
+    if (this.select.id) {
+      document
+        .querySelectorAll(`label[for="${this.select.id}"]`)
+        .forEach((label) =>
+          label.addEventListener("click", (event) => {
+            event.preventDefault();
+            this.focus();
+          })
+        );
+    }
+  }
+
+  observe() {
+    this.observer = new MutationObserver(() => {
+      this.syncFromSelect();
+    });
+
+    this.observer.observe(this.select, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["disabled"],
+    });
+  }
+
+  syncFromSelect() {
+    const options = Array.from(this.select.options).map((option) => ({
+      value: option.value,
+      label: option.textContent,
+      disabled: option.disabled,
+      selected: option.selected,
+    }));
+
+    this.optionsContainer.innerHTML = "";
+    this.optionButtons = [];
+
+    options.forEach((option, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "custom-select-option";
+      button.textContent = option.label;
+      button.dataset.value = option.value;
+      button.dataset.index = String(index);
+      button.setAttribute("role", "option");
+      button.setAttribute("aria-selected", option.selected ? "true" : "false");
+
+      if (option.selected) {
+        button.classList.add("is-selected");
+      }
+
+      if (option.disabled) {
+        button.disabled = true;
+      }
+
+      if (option.value === "") {
+        button.classList.add("is-placeholder");
+      }
+
+      button.addEventListener("click", () => {
+        if (button.disabled) return;
+        this.selectValue(option.value);
+      });
+
+      button.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          this.close();
+          this.focus();
+          return;
+        }
+
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          event.preventDefault();
+          const direction = event.key === "ArrowDown" ? 1 : -1;
+          this.focusOptionByIndex(index + direction);
+        }
+      });
+
+      this.optionsContainer.appendChild(button);
+      this.optionButtons.push(button);
+    });
+
+    const selectedOption =
+      this.select.options[this.select.selectedIndex] || this.select.options[0];
+    this.valueNode.textContent = selectedOption?.textContent || "";
+    this.wrapper.classList.toggle("is-disabled", this.select.disabled);
+    this.trigger.disabled = this.select.disabled;
+  }
+
+  selectValue(value) {
+    const previousValue = this.select.value;
+    this.select.value = value;
+    this.syncFromSelect();
+    this.close();
+    this.focus();
+
+    if (previousValue !== value) {
+      this.select.dispatchEvent(new Event("change", { bubbles: true }));
+      this.select.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  }
+
+  focusSelectedOption(direction = 1) {
+    const selectedIndex = this.select.selectedIndex >= 0 ? this.select.selectedIndex : 0;
+    this.focusOptionByIndex(selectedIndex + (this.isOpen() ? 0 : direction));
+  }
+
+  focusOptionByIndex(index) {
+    if (!this.optionButtons.length) return;
+
+    const enabledButtons = this.optionButtons.filter((button) => !button.disabled);
+    if (!enabledButtons.length) return;
+
+    const currentButton =
+      this.optionButtons[index] && !this.optionButtons[index].disabled
+        ? this.optionButtons[index]
+        : enabledButtons[Math.max(0, Math.min(enabledButtons.length - 1, index))] ||
+          enabledButtons[0];
+
+    currentButton.focus();
+  }
+
+  isOpen() {
+    return this.wrapper.classList.contains("is-open");
+  }
+
+  open() {
+    if (CustomSelect.openInstance && CustomSelect.openInstance !== this) {
+      CustomSelect.openInstance.close();
+    }
+
+    this.wrapper.classList.add("is-open");
+    this.trigger.setAttribute("aria-expanded", "true");
+    CustomSelect.openInstance = this;
+
+    if (!CustomSelect.boundOutsideHandler) {
+      CustomSelect.boundOutsideHandler = true;
+      document.addEventListener("click", (event) => {
+        if (!CustomSelect.openInstance) return;
+        if (!CustomSelect.openInstance.wrapper.contains(event.target)) {
+          CustomSelect.openInstance.close();
+        }
+      });
+    }
+  }
+
+  close() {
+    this.wrapper.classList.remove("is-open");
+    this.trigger.setAttribute("aria-expanded", "false");
+    if (CustomSelect.openInstance === this) {
+      CustomSelect.openInstance = null;
+    }
+  }
+
+  toggle() {
+    if (this.isOpen()) {
+      this.close();
+      return;
+    }
+    this.open();
+  }
+
+  focus() {
+    this.trigger.focus();
+  }
+}
 
 class AceScriptEditor {
   constructor(editorId) {
     this.editor = null;
-    this.editorId = editorId;
     this.container = document.getElementById(editorId);
 
     if (!this.container || typeof ace === "undefined") {
@@ -78,500 +363,722 @@ class AceScriptEditor {
   }
 
   setValue(value) {
-    if (!this.editor) return;
-    this.editor.setValue(value || DEFAULT_EXTENSION_SCRIPT, -1);
+    if (this.editor) {
+      this.editor.setValue(value || DEFAULT_EXTENSION_SCRIPT, -1);
+    }
   }
 
   getValue() {
-    if (!this.editor) return DEFAULT_EXTENSION_SCRIPT;
+    if (!this.editor) {
+      return DEFAULT_EXTENSION_SCRIPT;
+    }
     return this.editor.getValue();
   }
 }
 
 class SubscriptionManager {
   constructor() {
-    this.apiBase = "";
     this.subscriptions = [];
-    this.token = null;
     this.currentGroupId = null;
     this.currentGroupToken = null;
+    this.filters = {
+      search: "",
+      status: "all",
+      type: "all",
+    };
   }
 
-  async init() {
-    try {
-      this.bindEvents();
-    } catch (error) {
-      console.error("Failed to initialize:", error);
-    }
-  }
-
-  setGroup(groupId, groupToken) {
-    this.currentGroupId = groupId;
-    this.currentGroupToken = groupToken;
-    this.token = groupToken;
+  init() {
+    this.bindEvents();
   }
 
   bindEvents() {
+    document.getElementById("addForm")?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      this.addSubscription();
+    });
+
+    document.getElementById("editForm")?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      this.saveEditedSubscription();
+    });
+
+    document.getElementById("modal-type")?.addEventListener("change", (event) => {
+      this.updateTypeUI("add", event.target.value);
+    });
+
+    document.getElementById("edit-type")?.addEventListener("change", (event) => {
+      this.updateTypeUI("edit", event.target.value);
+    });
+
     document
-      .getElementById("addForm")
-      ?.addEventListener("submit", (e) => {
-        e.preventDefault();
-        this.addSubscription();
+      .getElementById("subscriptionSearch")
+      ?.addEventListener("input", (event) => {
+        this.filters.search = event.target.value.trim().toLowerCase();
+        this.render();
       });
 
-    const addType = document.getElementById("modal-type");
-    if (addType) {
-      addType.addEventListener("change", (e) => {
-        this.updateTypeUI("add", e.target.value);
-      });
-    }
+    document
+      .querySelectorAll("[data-status-filter]")
+      .forEach((button) =>
+        button.addEventListener("click", () => {
+          this.filters.status = button.dataset.statusFilter || "all";
+          this.updateFilterButtons();
+          this.render();
+        })
+      );
 
-    const editType = document.getElementById("edit-type");
-    if (editType) {
-      editType.addEventListener("change", (e) => {
-        this.updateTypeUI("edit", e.target.value);
+    document
+      .getElementById("subscriptionTypeFilter")
+      ?.addEventListener("change", (event) => {
+        this.filters.type = event.target.value || "all";
+        this.render();
       });
+
+    this.updateTypeUI("add", document.getElementById("modal-type")?.value || "subscription");
+    this.updateTypeUI("edit", document.getElementById("edit-type")?.value || "subscription");
+    this.updateFilterButtons();
+  }
+
+  setGroup(groupId, groupToken) {
+    this.currentGroupId = groupId ? String(groupId) : null;
+    this.currentGroupToken = groupToken || null;
+  }
+
+  clearSubscriptions() {
+    this.subscriptions = [];
+    this.updateStats([]);
+    this.render();
+  }
+
+  hasActiveFilters() {
+    return (
+      Boolean(this.filters.search) ||
+      this.filters.status !== "all" ||
+      this.filters.type !== "all"
+    );
+  }
+
+  updateFilterButtons() {
+    document.querySelectorAll("[data-status-filter]").forEach((button) => {
+      button.classList.toggle(
+        "is-active",
+        button.dataset.statusFilter === this.filters.status
+      );
+    });
+  }
+
+  getFilteredSubscriptions() {
+    return this.subscriptions.filter((subscription) => {
+      const type = normalizeType(subscription.type);
+      const haystack = [
+        subscription.name,
+        subscription.description,
+        subscription.url,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      const matchesSearch = !this.filters.search || haystack.includes(this.filters.search);
+      const matchesStatus =
+        this.filters.status === "all" ||
+        (this.filters.status === "active" && Boolean(subscription.active)) ||
+        (this.filters.status === "inactive" && !subscription.active);
+      const matchesType =
+        this.filters.type === "all" || this.filters.type === type;
+
+      return matchesSearch && matchesStatus && matchesType;
+    });
+  }
+
+  updateStats(subscriptions) {
+    const total = subscriptions.length;
+    const active = subscriptions.filter((item) => item.active).length;
+    const inactive = total - active;
+
+    document.getElementById("totalCount").textContent = String(total);
+    document.getElementById("activeCount").textContent = String(active);
+    document.getElementById("inactiveCount").textContent = String(inactive);
+  }
+
+  render() {
+    const filtered = this.getFilteredSubscriptions();
+
+    document.getElementById("filteredCount").textContent = String(filtered.length);
+    document.getElementById("visibleTotalCount").textContent = String(this.subscriptions.length);
+
+    this.renderSubscriptions(filtered);
+
+    if (typeof groupManager !== "undefined") {
+      groupManager.renderCurrentGroupSummary(this.subscriptions.length);
     }
   }
 
   previewSubscription() {
     if (!this.currentGroupToken) {
-      this.showMessage("请先选择分组", "error");
+      this.showMessage("请先选择一个分组。", "error");
       return;
     }
-    const format =
-      typeof configManager?.getDefaultPreviewFormat === "function"
-        ? configManager.getDefaultPreviewFormat()
-        : "ss";
-    const url = this.buildPreviewUrl(this.currentGroupToken, format);
-    window.open(url, "_blank");
+
+    const format = configManager.getDefaultPreviewFormat();
+    window.open(this.buildPreviewUrl(this.currentGroupToken, format), "_blank");
   }
 
   buildPreviewUrl(token, format) {
-    const base = `/${token}`;
-    const normalized = String(format || "").toLowerCase();
-    if (normalized === "clash") {
-      return `${base}?clash=1`;
-    }
-    return base;
+    const normalized = String(format || "ss").toLowerCase();
+    const basePath = `/${token}`;
+    return normalized === "clash" ? `${basePath}?clash=1` : basePath;
   }
 
   refreshSubscription() {
     if (!this.currentGroupToken) {
-      this.showMessage("请先选择分组", "error");
+      this.showMessage("请先选择一个分组。", "error");
       return;
     }
 
     openConfirmModal(
-      "确认刷新",
-      "确定要刷新订阅缓存吗？<br><span style='color: #666; font-size: 13px;'>这将强制重新获取所有订阅内容，可能需要一些时间。</span>",
+      "刷新缓存",
+      "这会强制重新拉取当前分组下的订阅内容，可能需要几秒钟。",
       async () => {
         try {
-          const url = `/${this.currentGroupToken}?refresh=true`;
-          const response = await fetch(url);
-          if (response.ok) {
-            this.showMessage("\u6d41\u91cf\u5df2\u5237\u65b0", "success");
-          } else {
-            this.showMessage("刷新失败，状态码：" + response.status, "error");
+          const response = await fetch(`/${this.currentGroupToken}?refresh=true`);
+          if (!response.ok) {
+            throw new Error(`状态码 ${response.status}`);
           }
+          this.showMessage("订阅缓存已刷新。", "success");
         } catch (error) {
-          this.showMessage("\u5237\u65b0\u6d41\u91cf\u5931\u8d25: " + error.message, "error");
+          this.showMessage(`刷新失败：${error.message}`, "error");
         }
       }
     );
   }
 
   async loadSubscriptions() {
+    if (!this.currentGroupId) {
+      this.clearSubscriptions();
+      return;
+    }
+
     try {
-      if (!this.currentGroupId) {
-        document.getElementById("subscriptionsList").innerHTML =
-          '<div class="no-subscriptions">请先选择分组</div>';
-        this.subscriptions = [];
-        this.updateStats([]);
-        return;
+      const response = await fetch(`/api/groups/${this.currentGroupId}/subscriptions`);
+      if (!response.ok) {
+        throw new Error("获取当前分组订阅失败");
       }
 
-      console.log("Fetching subscriptions for group:", this.currentGroupId);
-      const response = await fetch(`/api/groups/${this.currentGroupId}/subscriptions`);
-      if (!response.ok) throw new Error("Failed to fetch subscriptions");
       const data = await response.json();
-      this.subscriptions = (data || []).map((sub) => {
-        const isList = sub.type === "list" || sub.type === "node";
-        if (isList) return sub;
-        if (sub.userinfo && typeof sub.userinfo === "object") return sub;
-        return { ...sub, userinfo: { pending: true } };
+      this.subscriptions = (data || []).map((subscription) => {
+        const type = normalizeType(subscription.type);
+        if (type === "list") {
+          return { ...subscription, type };
+        }
+
+        if (subscription.userinfo && typeof subscription.userinfo === "object") {
+          return { ...subscription, type };
+        }
+
+        return {
+          ...subscription,
+          type,
+          userinfo: { pending: true },
+        };
       });
-      console.log("Fetched subscriptions:", this.subscriptions);
-      this.renderSubscriptions(this.subscriptions);
+
       this.updateStats(this.subscriptions);
+      this.render();
+
       this.loadUsage().catch((error) => {
-        console.error("Error loading usage:", error);
+        console.error("Failed to load usage:", error);
       });
     } catch (error) {
-      console.error("Error loading subscriptions:", error);
-      document.getElementById("subscriptionsList").innerHTML =
-        '<div class="error">加载失败，请稍后重试</div>';
+      console.error("Failed to load subscriptions:", error);
+      this.subscriptions = [];
+      document.getElementById("filteredCount").textContent = "0";
+      document.getElementById("visibleTotalCount").textContent = "0";
+      document.getElementById("subscriptionsList").innerHTML = this.createErrorState(
+        "订阅加载失败",
+        "请稍后重试，或检查当前分组和服务状态是否正常。"
+      );
+      this.updateStats([]);
+      if (typeof groupManager !== "undefined") {
+        groupManager.renderCurrentGroupSummary(0);
+      }
     }
   }
 
   async loadUsage({ refresh = false } = {}) {
     const ids = this.subscriptions
-      .filter((sub) => sub.type !== "list" && sub.type !== "node")
-      .map((sub) => sub.id)
+      .filter((subscription) => normalizeType(subscription.type) !== "list")
+      .map((subscription) => subscription.id)
       .join(",");
 
-    if (!ids) return;
+    if (!ids) {
+      this.render();
+      return;
+    }
 
-    const groupParam = this.currentGroupId ? `&groupId=${this.currentGroupId}` : "";
-    const url = `/api/subscriptions/usage?ids=${encodeURIComponent(ids)}${
-      refresh ? "&refresh=1" : ""
-    }${groupParam}`;
-    const response = await fetch(url, { skipLoading: true });
-    if (!response.ok) throw new Error("Failed to fetch usage");
+    const params = new URLSearchParams({
+      ids,
+      groupId: this.currentGroupId,
+    });
+
+    if (refresh) {
+      params.set("refresh", "1");
+    }
+
+    const response = await fetch(`/api/subscriptions/usage?${params.toString()}`, {
+      skipLoading: true,
+    });
+
+    if (!response.ok) {
+      throw new Error("获取流量信息失败");
+    }
 
     const result = await response.json();
-    const usageMap = new Map(
-      (result.data || []).map((item) => [String(item.id), item])
-    );
+    const usageMap = new Map((result.data || []).map((item) => [String(item.id), item]));
 
-    this.subscriptions = this.subscriptions.map((sub) => {
-      const usage = usageMap.get(String(sub.id));
-      if (!usage) return sub;
+    this.subscriptions = this.subscriptions.map((subscription) => {
+      const usage = usageMap.get(String(subscription.id));
+      if (!usage) {
+        return subscription;
+      }
+
       return {
-        ...sub,
+        ...subscription,
         userinfo: usage.userinfo || {},
         _usageMeta: {
-          isStale: usage.isStale,
-          updatedAt: usage.updatedAt,
+          isStale: Boolean(usage.isStale),
+          updatedAt: usage.updatedAt || 0,
         },
       };
     });
 
-    this.renderSubscriptions(this.subscriptions);
+    this.render();
   }
 
   async refreshUsage() {
+    if (!this.currentGroupId) {
+      this.showMessage("请先选择一个分组。", "error");
+      return;
+    }
+
     try {
       await this.loadUsage({ refresh: true });
-      this.showMessage("流量已刷新", "success");
+      this.showMessage("流量信息已刷新。", "success");
     } catch (error) {
-      console.error("Error refreshing usage:", error);
-      this.showMessage("刷新流量失败: " + error.message, "error");
+      console.error("Failed to refresh usage:", error);
+      this.showMessage(`刷新失败：${error.message}`, "error");
     }
-  }
-
-  updateStats(subscriptions) {
-    const total = subscriptions.length;
-    const active = subscriptions.filter((s) => s.active).length;
-    const inactive = total - active;
-
-    document.getElementById("totalCount").textContent = total;
-    document.getElementById("activeCount").textContent = active;
-    document.getElementById("inactiveCount").textContent = inactive;
-  }
-
-  getUsageClass(usage) {
-    if (usage <= 50) return "low";
-    if (usage <= 80) return "medium";
-    return "high";
-  }
-
-  formatTraffic(bytes, total) {
-    // 兼容保留：当只有合并使用率需要时仍可使用原展示（单色进度条）
-    console.log("formatTraffic input:", { bytes, total });
-    const bytesInGB = bytes / 1024 / 1024 / 1024;
-    const totalInGB = total / 1024 / 1024 / 1024;
-    console.log("formatTraffic converted:", { bytesInGB, totalInGB });
-
-    if (!totalInGB) return "";
-    const usage = Math.min(
-      100,
-      Math.round((bytesInGB / totalInGB) * 100)
-    );
-    const usageClass = this.getUsageClass(usage);
-    return `
-        <div class="usage-bar">
-          <div class="usage-progress ${usageClass}" style="width: ${usage}%"></div>
-        </div>
-        <span class="usage-text">${usage}%</span>
-      `;
-  }
-
-  formatUsageBar(upload, download, total) {
-    // 仅返回分段进度条（不包含文本），文本将放到上一行显示
-    if (!total || total <= 0) return "";
-
-    const up = upload || 0;
-    const down = download || 0;
-
-    let downPct = Math.round((down / total) * 100);
-    let upPct = Math.round((up / total) * 100);
-
-    if (downPct + upPct > 100) {
-      const scale = 100 / (downPct + upPct);
-      downPct = Math.round(downPct * scale);
-      upPct = 100 - downPct;
-    }
-
-    return `
-        <div class="usage-bar">
-          <div class="usage-download" style="width:${downPct}%"></div>
-          <div class="usage-upload" style="width:${upPct}%"></div>
-        </div>
-      `;
-  }
-
-  formatUsageText(upload, download, total) {
-    if (!total || total <= 0) return "0B / 0B";
-
-    const used = (upload || 0) + (download || 0);
-
-    const formatSize = (bytes) => {
-      if (bytes === 0) return '0B';
-      const k = 1024;
-      const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + sizes[i];
-    };
-
-    return `${formatSize(used)} / ${formatSize(total)}`;
-  }
-
-  formatExpireDate(expire) {
-    if (!expire) return "长期有效";
-    const date = new Date(expire * 1000);
-    return date.toISOString().split('T')[0];
-  }
-
-  formatGB(sub) {
-    // 返回剩余流量，明确在无有效 total 时返回 "0GB"
-    if (!sub || !sub.userinfo) return "0GB";
-
-    const userinfo = sub.userinfo || {};
-
-    // 如果没有 total 或者 total 非正，则直接返回 0GB（不再使用配置作为回退）
-    if (!userinfo.total || userinfo.total <= 0) return "0GB";
-
-    const used = (userinfo.upload || 0) + (userinfo.download || 0);
-    const remaining = (userinfo.total - used) / 1024 / 1024 / 1024;
-
-    if (!isFinite(remaining) || isNaN(remaining) || remaining <= 0)
-      return "0GB";
-
-    return `${Math.round(remaining)}GB`;
-  }
-
-  calculateUsage(userinfo) {
-    // 仅在存在有效 total 时计算使用率，否则返回 0
-    if (!userinfo || !userinfo.total || userinfo.total <= 0) return 0;
-
-    const used = (userinfo.upload || 0) + (userinfo.download || 0);
-    const usage = Math.min(
-      100,
-      Math.round((used / userinfo.total) * 100)
-    );
-    return usage;
   }
 
   renderSubscriptions(subscriptions) {
     const container = document.getElementById("subscriptionsList");
 
-    if (!subscriptions || subscriptions.length === 0) {
-      container.innerHTML =
-        '<div class="no-subscriptions">暂无订阅数据</div>';
+    if (!this.currentGroupId) {
+      container.innerHTML = this.createEmptyState(
+        "还没有选中分组",
+        groupManager?.hasGroups()
+          ? "先从左侧选择一个分组，再查看或管理其中的订阅。"
+          : "当前没有任何分组，先创建分组，再开始整理订阅。",
+        groupManager?.hasGroups() ? "去选分组" : "新建分组",
+        groupManager?.hasGroups() ? "focusGroupSelect()" : "openGroupManageModal()"
+      );
       return;
     }
 
-    console.log("Rendering subscriptions:", subscriptions);
-    const html = subscriptions
-      .map((sub) => {
-        console.log("Processing subscription:", sub);
-        // 仅使用接口返回的 userinfo，不再从配置或页面读取 total
-        const isList = sub.type === 'list' || sub.type === 'node';
-        const userinfo = sub.userinfo || {};
-        const usagePending = !isList && userinfo.pending === true;
+    if (this.subscriptions.length === 0) {
+      container.innerHTML = this.createEmptyState(
+        "这个分组还是空的",
+        "可以直接新建订阅，或者把已有订阅绑定到当前分组。",
+        "新建订阅",
+        "openAddModal()"
+      );
+      return;
+    }
 
-        const usage = this.calculateUsage(userinfo);
-        const usageClass = this.getUsageClass(usage);
-        const usageHtml = usagePending
-          ? '\u52a0\u8f7d\u4e2d...'
-          : this.formatUsageBar(
-              userinfo.upload || 0,
-              userinfo.download || 0,
-              userinfo.total
-            );
-        const usageText = usagePending
-          ? '加载中...'
-          : this.formatUsageText(
-              userinfo.upload || 0,
-              userinfo.download || 0,
-              userinfo.total
-            );
-        const expireText = usagePending
-          ? '...'
-          : this.formatExpireDate(userinfo.expire);
+    if (subscriptions.length === 0) {
+      container.innerHTML = this.createEmptyState(
+        "没有匹配结果",
+        "当前筛选条件下没有找到订阅，可以清空搜索词或切换筛选条件。",
+        "清空筛选",
+        "subscriptionManager.resetFilters()"
+      );
+      return;
+    }
 
-        console.log("Processed values:", {
-          usage,
-          usageClass,
-          usageHtml,
-          usageText,
-        });
+    container.innerHTML = subscriptions.map((subscription) => this.renderSubscriptionCard(subscription)).join("");
+  }
 
-        const typeLabel = isList ? "节点列表" : "订阅";
-        const listCount = isList ? this.parseNodeUrls(sub.url || "").length : 0;
+  renderSubscriptionCard(subscription) {
+    const type = normalizeType(subscription.type);
+    const isList = type === "list";
+    const typeLabel = isList ? "节点列表" : "订阅链接";
+    const statusLabel = subscription.active ? "启用中" : "已停用";
+    const userinfo = subscription.userinfo || {};
+    const usagePending = !isList && userinfo.pending === true;
+    const usageText = usagePending
+      ? "流量读取中..."
+      : `${formatBytes((userinfo.upload || 0) + (userinfo.download || 0))} / ${formatBytes(userinfo.total || 0)}`;
+    const expireText = usagePending ? "--" : this.formatExpireDate(userinfo.expire);
+    const usageBar = usagePending
+      ? '<div class="usage-bar"></div>'
+      : this.formatUsageBar(userinfo.upload || 0, userinfo.download || 0, userinfo.total || 0);
+    const usageNote = usagePending
+      ? "正在读取实时流量。"
+      : subscription._usageMeta?.isStale
+        ? "当前显示的是缓存数据，后台会继续刷新。"
+        : "下载流量和上传流量按颜色拆分显示。";
+    const urlPreview = isList
+      ? `节点列表 · ${this.parseNodeUrls(subscription.url || "").length} 条`
+      : this.getDomain(subscription.url);
+    const sourceLabel = isList
+      ? "点击复制节点内容"
+      : "点击复制完整链接";
 
-        return `
-          <div class="subscription-item ${sub.active ? "active" : "inactive"
-          }">
-            <div class="subscription-header">
-              <div class="subscription-name" style="position: relative;">
-                ${isList ? '🔌' : '📡'} ${sub.name}
-                <span style="font-size: 0.8em; color: #666; margin-left: 8px; font-weight: normal; background: #eee; padding: 2px 6px; border-radius: 4px;">
-                  ${typeLabel}
-                </span>
-              </div>
-              <div class="subscription-status ${sub.active ? "status-active" : "status-inactive"
-          }">
-                ${sub.active ? "活跃" : "已禁用"}
-              </div>
+    return `
+      <article class="subscription-item ${subscription.active ? "" : "inactive"}">
+        <div class="subscription-header">
+          <div>
+            <div class="subscription-title">
+              <span class="subscription-name">${escapeHtml(subscription.name)}</span>
+              <span class="subscription-type">${typeLabel}</span>
             </div>
-            <div class="subscription-url" title="${sub.url}" style="cursor: pointer;" onclick="subscriptionManager.copyToClipboard('${this.escapeJs(sub.url)}')">
-              🔗 ${isList ? `本地节点列表 · ${listCount} 条` : this.getDomain(sub.url)}
-            </div>
-            ${sub.description
-            ? `<div class="subscription-description">${sub.description}</div>`
-            : ""
-          }
-            ${!isList ? `
-            <div class="subscription-meta">
-              <div class="subscription-meta-row" style="justify-content: space-between; margin-bottom: 8px;">
-                <span class="meta-traffic${usagePending ? " pending" : ""}" style="font-size: 0.9em; color: #333;">${usageText}</span>
-                <span class="meta-expire${usagePending ? " pending" : ""}" style="font-size: 0.9em; color: #666;">${expireText}</span>
-              </div>
-              <div class="subscription-meta-row">
-                ${usageHtml}
-              </div>
-            </div>` : ''}
-            <div class="subscription-actions">
-              <button class="btn btn-primary btn-sm" onclick="subscriptionManager.copyToClipboard('${this.escapeJs(sub.url)}')">
-                复制
-              </button>
-              <button class="btn btn-primary btn-sm" onclick="openEditModal(${sub.id
-          }, '${this.escapeJs(sub.name)}', '${this.escapeJs(
-            sub.url
-          )}', '${this.escapeJs(sub.description || "")}', '${sub.type || "subscription"}')">
-                            编辑
-                        </button>
-              <button class="btn btn-sm ${sub.active ? "btn-warning" : "btn-success"
-          }" 
-                onclick="subscriptionManager.toggleSubscription('${sub.id
-          }')">
-                ${sub.active ? "禁用" : "启用"}
-              </button>
-              <button class="btn btn-sm btn-danger" onclick="subscriptionManager.deleteSubscription('${sub.id
-          }', '${this.escapeJs(sub.name)}')">删除</button>
-              <button class="btn btn-sm" style="background: #6c757d; color: white;" onclick="groupManager.detachSubscription('${sub.id
-          }', '${this.escapeJs(sub.name)}')">解绑</button>
-            </div>
+            ${subscription.description
+              ? `<p class="subscription-description">${escapeHtml(subscription.description)}</p>`
+              : ""}
           </div>
-        `;
-      })
-      .join("");
+          <span class="subscription-status ${subscription.active ? "status-active" : "status-inactive"}">
+            ${statusLabel}
+          </span>
+        </div>
 
-    container.innerHTML = html;
+        <button
+          type="button"
+          class="subscription-url"
+          title="${escapeHtml(subscription.url)}"
+          onclick="subscriptionManager.copyToClipboard('${escapeJs(subscription.url)}')"
+        >
+          <span class="subscription-url-text">${escapeHtml(urlPreview)}</span>
+          <small>${escapeHtml(sourceLabel)}</small>
+        </button>
+
+        ${isList
+          ? `<div class="subscription-footnote">节点列表不会读取流量信息，但仍可以像普通订阅一样启停和解绑。</div>`
+          : `
+            <div class="subscription-meta">
+              <div class="subscription-meta-row">
+                <div>
+                  <div class="meta-label">已用流量</div>
+                  <div class="meta-value ${usagePending ? "pending" : ""}">${usageText}</div>
+                </div>
+                <div>
+                  <div class="meta-label">到期时间</div>
+                  <div class="meta-value ${usagePending ? "pending" : ""}">${expireText}</div>
+                </div>
+              </div>
+              <div>${usageBar}</div>
+              <div class="subscription-footnote">${usageNote}</div>
+            </div>
+          `}
+
+        <div class="subscription-actions">
+          <button type="button" class="btn btn-primary btn-sm" onclick="subscriptionManager.copyToClipboard('${escapeJs(subscription.url)}')">
+            复制
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary btn-sm"
+            onclick="openEditModal(${subscription.id}, '${escapeJs(subscription.name)}', '${escapeJs(subscription.url)}', '${escapeJs(subscription.description || "")}', '${escapeJs(type)}')"
+          >
+            编辑
+          </button>
+          <button
+            type="button"
+            class="btn ${subscription.active ? "btn-warning" : "btn-success"} btn-sm"
+            onclick="subscriptionManager.toggleSubscription('${escapeJs(subscription.id)}')"
+          >
+            ${subscription.active ? "停用" : "启用"}
+          </button>
+          <button
+            type="button"
+            class="btn btn-danger btn-sm"
+            onclick="subscriptionManager.deleteSubscription('${escapeJs(subscription.id)}', '${escapeJs(subscription.name)}')"
+          >
+            删除
+          </button>
+          <button
+            type="button"
+            class="btn btn-neutral btn-sm"
+            onclick="groupManager.detachSubscription('${escapeJs(subscription.id)}', '${escapeJs(subscription.name)}')"
+          >
+            解绑
+          </button>
+        </div>
+      </article>
+    `;
+  }
+
+  createEmptyState(title, description, actionLabel, action) {
+    const button = actionLabel && action
+      ? `<button type="button" class="btn btn-primary" onclick="${action}">${escapeHtml(actionLabel)}</button>`
+      : "";
+
+    return `
+      <div class="empty-state">
+        <div>
+          <strong>${escapeHtml(title)}</strong>
+          <p>${escapeHtml(description)}</p>
+          ${button}
+        </div>
+      </div>
+    `;
+  }
+
+  createErrorState(title, description) {
+    return `
+      <div class="error-state">
+        <div>
+          <strong>${escapeHtml(title)}</strong>
+          <p>${escapeHtml(description)}</p>
+        </div>
+      </div>
+    `;
+  }
+
+  formatUsageBar(upload, download, total) {
+    const normalizedTotal = Number(total) || 0;
+    if (normalizedTotal <= 0) {
+      return '<div class="usage-bar"></div>';
+    }
+
+    const normalizedUpload = Number(upload) || 0;
+    const normalizedDownload = Number(download) || 0;
+    const used = Math.min(normalizedUpload + normalizedDownload, normalizedTotal);
+
+    if (used <= 0) {
+      return '<div class="usage-bar"></div>';
+    }
+
+    let downloadPercentage = Math.round((normalizedDownload / normalizedTotal) * 100);
+    let uploadPercentage = Math.round((normalizedUpload / normalizedTotal) * 100);
+
+    if (downloadPercentage + uploadPercentage > 100) {
+      const scale = 100 / (downloadPercentage + uploadPercentage);
+      downloadPercentage = Math.round(downloadPercentage * scale);
+      uploadPercentage = 100 - downloadPercentage;
+    }
+
+    return `
+      <div class="usage-bar">
+        <div class="usage-download" style="width:${downloadPercentage}%"></div>
+        <div class="usage-upload" style="width:${uploadPercentage}%"></div>
+      </div>
+    `;
+  }
+
+  formatExpireDate(expire) {
+    if (!expire) {
+      return "长期有效";
+    }
+
+    const date = new Date(Number(expire) * 1000);
+    if (Number.isNaN(date.getTime())) {
+      return "--";
+    }
+
+    return date.toISOString().slice(0, 10);
+  }
+
+  parseNodeUrls(text = "") {
+    return String(text)
+      .split(/[\r\n,;\s]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  getDomain(url) {
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return "点击复制原始链接";
+    }
+  }
+
+  updateTypeUI(mode, type) {
+    const normalizedType = normalizeType(type);
+    const isList = normalizedType === "list";
+
+    const config = {
+      title: isList ? "节点列表" : "订阅链接",
+      namePlaceholder: isList ? "可选，默认显示为“节点列表”" : "例如：机场 A",
+      urlPlaceholder: isList
+        ? "trojan://...\nvmess://...\nvless://..."
+        : "https://example.com/subscribe",
+      helpText: isList
+        ? "支持一次粘贴多条节点链接，系统会自动按换行拆分。"
+        : "这里只接收一条标准订阅链接。",
+      modalTitle: isList
+        ? (mode === "add" ? "新建节点列表" : "编辑节点列表")
+        : (mode === "add" ? "新建订阅" : "编辑订阅"),
+    };
+
+    if (mode === "add") {
+      document.getElementById("addModalTitle").textContent = config.modalTitle;
+      document.getElementById("modal-name-label").textContent = isList ? "名称" : "名称 *";
+      document.getElementById("modal-url-label").textContent = `${config.title} *`;
+      document.getElementById("modal-name").placeholder = config.namePlaceholder;
+      document.getElementById("modal-name").required = !isList;
+      document.getElementById("modal-url").placeholder = config.urlPlaceholder;
+      document.getElementById("modal-url-help").textContent = config.helpText;
+      return;
+    }
+
+    document.getElementById("editModalTitle").textContent = config.modalTitle;
+    document.getElementById("edit-name-label").textContent = isList ? "名称" : "名称 *";
+    document.getElementById("edit-url-label").textContent = `${config.title} *`;
+    document.getElementById("edit-name").placeholder = config.namePlaceholder;
+    document.getElementById("edit-name").required = !isList;
+    document.getElementById("edit-url").placeholder = config.urlPlaceholder;
+    document.getElementById("edit-url-help").textContent = config.helpText;
+  }
+
+  resetFilters() {
+    this.filters = {
+      search: "",
+      status: "all",
+      type: "all",
+    };
+
+    document.getElementById("subscriptionSearch").value = "";
+    document.getElementById("subscriptionTypeFilter").value = "all";
+    CustomSelect.syncById("subscriptionTypeFilter");
+    this.updateFilterButtons();
+    this.render();
+  }
+
+  buildPayload(prefix) {
+    const type = normalizeType(document.getElementById(`${prefix}-type`).value);
+    const nameInput = document.getElementById(`${prefix}-name`);
+    const urlInput = document.getElementById(`${prefix}-url`);
+    const descriptionInput = document.getElementById(`${prefix}-description`);
+
+    const rawUrl = urlInput.value.trim();
+    const urls = type === "list" ? this.parseNodeUrls(rawUrl) : [rawUrl];
+    const finalUrl = type === "list" ? urls.join("\n") : urls[0];
+    const finalName = nameInput.value.trim() || (type === "list" ? "节点列表" : "");
+
+    return {
+      type,
+      finalName,
+      finalUrl,
+      description: descriptionInput.value.trim(),
+      urls,
+    };
+  }
+
+  validatePayload({ type, finalName, urls, finalUrl }) {
+    if (!finalUrl) {
+      this.showMessage(type === "list" ? "请粘贴至少一条节点链接。" : "请填写订阅链接。", "error");
+      return false;
+    }
+
+    if (type === "list" && urls.length === 0) {
+      this.showMessage("节点列表不能为空。", "error");
+      return false;
+    }
+
+    if (type !== "list" && !finalName) {
+      this.showMessage("请填写订阅名称。", "error");
+      return false;
+    }
+
+    return true;
   }
 
   async addSubscription() {
-    const type = document.getElementById("modal-type").value;
-    const name = document.getElementById("modal-name").value.trim();
-    const url = document.getElementById("modal-url").value.trim();
-    const description = document
-      .getElementById("modal-description")
-      .value.trim();
+    if (!this.currentGroupId) {
+      this.showMessage("请先选择一个分组，再新增订阅。", "error");
+      return;
+    }
 
-    if (!url) {
-      const label = type === "list" ? "节点列表" : "订阅";
-      this.showMessage(`请填写${label}链接`, "error");
+    const payload = this.buildPayload("modal");
+
+    if (!this.validatePayload(payload)) {
       return;
     }
 
     try {
-      if (type === "list") {
-        const urls = this.parseNodeUrls(url);
-        if (urls.length === 0) {
-          this.showMessage("请输入有效的节点链接", "error");
-          return;
-        }
-        const finalName = name || "节点列表";
-        const normalizedUrl = urls.join("\n");
-        const response = await fetch("/api/subscriptions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name: finalName,
-            url: normalizedUrl,
-            description,
-            type,
-          }),
-        });
-
-        const result = await response.json();
-
-        if (response.ok) {
-          this.showMessage("节点列表添加成功！", "success");
-          // 自动绑定到当前分组
-          if (this.currentGroupId && result.data && result.data.id) {
-            await fetch(`/api/groups/${this.currentGroupId}/subscriptions`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ subscriptionId: result.data.id }),
-            });
-          }
-          document.getElementById("addForm").reset();
-          closeModal("addModal");
-          this.loadSubscriptions();
-        } else {
-          this.showMessage("添加失败：" + result.error, "error");
-        }
-        return;
-      }
-
-      if (!name) {
-        this.showMessage("请填写订阅名称", "error");
-        return;
-      }
-
       const response = await fetch("/api/subscriptions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ name, url, description, type }),
+        body: JSON.stringify({
+          name: payload.finalName,
+          url: payload.finalUrl,
+          description: payload.description,
+          type: payload.type,
+        }),
       });
 
       const result = await response.json();
-
-      if (response.ok) {
-        this.showMessage("订阅添加成功！", "success");
-        // 自动绑定到当前分组
-        if (this.currentGroupId && result.data && result.data.id) {
-          await fetch(`/api/groups/${this.currentGroupId}/subscriptions`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ subscriptionId: result.data.id }),
-          });
-        }
-        document.getElementById("addForm").reset();
-        closeModal("addModal");
-        this.loadSubscriptions();
-      } else {
-        this.showMessage("添加失败：" + result.error, "error");
+      if (!response.ok) {
+        throw new Error(result.error || "新增订阅失败");
       }
+
+      const attachResponse = await fetch(`/api/groups/${this.currentGroupId}/subscriptions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscriptionId: result.data.id }),
+      });
+
+      const attachResult = await attachResponse.json();
+      if (!attachResponse.ok) {
+        throw new Error(attachResult.error || "订阅创建成功，但绑定分组失败");
+      }
+
+      document.getElementById("addForm").reset();
+      this.updateTypeUI("add", "subscription");
+      closeModal("addModal");
+      this.showMessage("订阅已创建并绑定到当前分组。", "success");
+      await this.loadSubscriptions();
     } catch (error) {
-      this.showMessage("添加失败：" + error.message, "error");
+      this.showMessage(`新增失败：${error.message}`, "error");
+    }
+  }
+
+  async saveEditedSubscription() {
+    const id = document.getElementById("edit-id").value;
+    const payload = this.buildPayload("edit");
+
+    if (!this.validatePayload(payload)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/subscriptions/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: payload.finalName,
+          url: payload.finalUrl,
+          description: payload.description,
+          type: payload.type,
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || "更新订阅失败");
+      }
+
+      closeModal("editModal");
+      this.showMessage("订阅修改已保存。", "success");
+      await this.loadSubscriptions();
+    } catch (error) {
+      this.showMessage(`更新失败：${error.message}`, "error");
     }
   }
 
@@ -582,22 +1089,21 @@ class SubscriptionManager {
       });
 
       const result = await response.json();
-
-      if (response.ok) {
-        this.showMessage("订阅状态更新成功！", "success");
-        this.loadSubscriptions();
-      } else {
-        this.showMessage("更新失败：" + result.error, "error");
+      if (!response.ok) {
+        throw new Error(result.error || "切换状态失败");
       }
+
+      this.showMessage("订阅状态已更新。", "success");
+      await this.loadSubscriptions();
     } catch (error) {
-      this.showMessage("更新失败：" + error.message, "error");
+      this.showMessage(`操作失败：${error.message}`, "error");
     }
   }
 
   deleteSubscription(id, name) {
     openConfirmModal(
-      "确认删除",
-      `确定要删除订阅 "${name}" 吗？此操作无法撤销。`,
+      "删除订阅",
+      `确定要删除「${escapeHtml(name)}」吗？删除后无法恢复。`,
       async () => {
         try {
           const response = await fetch(`/api/subscriptions/${id}`, {
@@ -605,132 +1111,31 @@ class SubscriptionManager {
           });
 
           const result = await response.json();
-
-          if (response.ok) {
-            this.showMessage("订阅删除成功！", "success");
-            this.loadSubscriptions();
-          } else {
-            this.showMessage("删除失败：" + result.error, "error");
+          if (!response.ok) {
+            throw new Error(result.error || "删除失败");
           }
+
+          this.showMessage("订阅已删除。", "success");
+          await this.loadSubscriptions();
         } catch (error) {
-          this.showMessage("删除失败：" + error.message, "error");
+          this.showMessage(`删除失败：${error.message}`, "error");
         }
       }
     );
   }
 
-  async updateSubscription(id, name, url, description, type) {
-    if (!name || !url) {
-      const label = type === "node" ? "节点" : "订阅";
-      this.showMessage(`${label}名称和链接不能为空`, "error");
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/subscriptions/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name, url, description, type }),
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        this.showMessage("订阅更新成功！", "success");
-        this.loadSubscriptions();
-      } else {
-        this.showMessage("更新失败：" + result.error, "error");
-      }
-    } catch (error) {
-      this.showMessage("更新失败：" + error.message, "error");
-    }
-  }
-
-  showMessage(message, type) {
-    createGlobalToast(message, type);
-  }
-
-  escapeHtml(text) {
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  escapeJs(text) {
-    return text
-      .replace(/\\/g, "\\\\")
-      .replace(/\r/g, "\\r")
-      .replace(/\n/g, "\\n")
-      .replace(/'/g, "\\'")
-      .replace(/"/g, '\\"');
-  }
-
-  getProtocol(url) {
-    try {
-      const index = url.indexOf("://");
-      if (index > -1) {
-        return url.substring(0, index).toUpperCase();
-      }
-      return "节点";
-    } catch (e) {
-      return "节点";
-    }
-  }
-
-  getDomain(url) {
-    try {
-      const urlObj = new URL(url);
-      return urlObj.hostname;
-    } catch (e) {
-      return url;
-    }
-  }
-
-  parseNodeUrls(text) {
-    return text
-      .split(/[\r\n,;\s]+/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-  }
-
-  updateTypeUI(mode, type) {
-    const normalizedType = type === "node" ? "list" : type;
-    const isList = normalizedType === "list";
-    const label = isList ? "节点列表" : "订阅链接";
-    const placeholder = isList
-      ? "trojan://example.com:443?security=tls#节点名\nvmess://xxxx\n..."
-      : "https://example.com/subscribe";
-    const helpText = isList
-      ? "可粘贴多条节点链接，每行一条"
-      : "仅支持单条订阅链接";
-
-    if (mode === "add") {
-      const urlLabel = document.querySelector('label[for="modal-url"]');
-      const urlInput = document.getElementById("modal-url");
-      const urlHelp = document.getElementById("modal-url-help");
-      if (urlLabel) urlLabel.textContent = `${label} *`;
-      if (urlInput) urlInput.placeholder = placeholder;
-      if (urlHelp) urlHelp.textContent = helpText;
-    } else if (mode === "edit") {
-      const urlLabel = document.querySelector('label[for="edit-url"]');
-      const urlInput = document.getElementById("edit-url");
-      const urlHelp = document.getElementById("edit-url-help");
-      if (urlLabel) urlLabel.textContent = `${label} *`;
-      if (urlInput) urlInput.placeholder = placeholder;
-      if (urlHelp) urlHelp.textContent = helpText;
-    }
-  }
-
   async copyToClipboard(text) {
     try {
       await navigator.clipboard.writeText(text);
-      this.showMessage("链接已复制到剪贴板", "success");
-    } catch (err) {
-      console.error("Copy failed", err);
-      this.showMessage("复制失败 (请手动复制)", "error");
+      this.showMessage("已复制到剪贴板。", "success");
+    } catch (error) {
+      console.error("Copy failed:", error);
+      this.showMessage("复制失败，请手动复制。", "error");
     }
+  }
+
+  showMessage(message, type = "info") {
+    createGlobalToast(message, type);
   }
 }
 
@@ -738,21 +1143,20 @@ class ConfigManager {
   constructor() {
     this.extensionScriptEditor = new AceScriptEditor("modal-extensionScriptEditor");
     this.currentConfig = null;
-    this.init();
   }
 
-  async init() {
-    await this.loadConfig();
+  init() {
     this.bindEvents();
+    this.loadConfig().catch((error) => {
+      console.error("Failed to initialize config:", error);
+    });
   }
 
   bindEvents() {
-    document
-      .getElementById("configForm")
-      .addEventListener("submit", (e) => {
-        e.preventDefault();
-        this.saveConfig();
-      });
+    document.getElementById("configForm")?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      this.saveConfig();
+    });
   }
 
   async loadConfig() {
@@ -763,39 +1167,38 @@ class ConfigManager {
       ]);
 
       if (!configResponse.ok) {
-        throw new Error("加载系统配置失败");
+        throw new Error("读取系统配置失败");
       }
+
       if (!scriptResponse.ok) {
-        throw new Error("加载扩展脚本失败");
+        throw new Error("读取扩展脚本失败");
       }
 
       const config = await configResponse.json();
       const scriptResult = await scriptResponse.json();
       this.populateForm(config, scriptResult.script);
     } catch (error) {
-      this.showMessage("加载配置失败：" + error.message, "error");
+      this.showMessage(`加载配置失败：${error.message}`, "error");
     }
   }
 
   populateForm(config, extensionScript = DEFAULT_EXTENSION_SCRIPT) {
     document.getElementById("modal-token").value = config.token || "";
-    document.getElementById("modal-fileName").value =
-      config.fileName || "";
-    const previewFormat = config.defaultPreviewFormat || "ss";
-    const previewFormatEl = document.getElementById("modal-defaultPreviewFormat");
-    if (previewFormatEl) {
-      previewFormatEl.value = previewFormat;
-    }
-    document.getElementById("modal-subUpdateTime").value =
-      config.subUpdateTime || 6;
+    document.getElementById("modal-fileName").value = config.fileName || "";
+    document.getElementById("modal-defaultPreviewFormat").value =
+      config.defaultPreviewFormat || "ss";
+    CustomSelect.syncById("modal-defaultPreviewFormat");
+    document.getElementById("modal-subUpdateTime").value = config.subUpdateTime || 6;
     document.getElementById("modal-total").value = config.total ?? 0;
-    document.getElementById("modal-botToken").value =
-      config.botToken || "";
+    document.getElementById("modal-botToken").value = config.botToken || "";
     document.getElementById("modal-chatId").value = config.chatId || "";
-    document.getElementById("modal-adminPassword").value =
-      config.adminPassword || "";
+    document.getElementById("modal-adminPassword").value = config.adminPassword || "";
+
     this.extensionScriptEditor.setValue(extensionScript || DEFAULT_EXTENSION_SCRIPT);
-    this.currentConfig = { ...config, defaultPreviewFormat: previewFormat };
+    this.currentConfig = {
+      ...config,
+      defaultPreviewFormat: config.defaultPreviewFormat || "ss",
+    };
   }
 
   async saveConfig() {
@@ -803,23 +1206,20 @@ class ConfigManager {
       token: document.getElementById("modal-token").value.trim(),
       fileName: document.getElementById("modal-fileName").value.trim(),
       defaultPreviewFormat:
-        document.getElementById("modal-defaultPreviewFormat")?.value || "ss",
+        document.getElementById("modal-defaultPreviewFormat").value || "ss",
       subUpdateTime:
-        parseInt(document.getElementById("modal-subUpdateTime").value) ||
-        6,
+        parseInt(document.getElementById("modal-subUpdateTime").value, 10) || 6,
       total:
         document.getElementById("modal-total").value === ""
           ? 0
           : parseInt(document.getElementById("modal-total").value, 10) || 0,
       botToken: document.getElementById("modal-botToken").value.trim(),
       chatId: document.getElementById("modal-chatId").value.trim(),
-      adminPassword: document
-        .getElementById("modal-adminPassword")
-        .value.trim(),
+      adminPassword: document.getElementById("modal-adminPassword").value.trim(),
     };
 
     if (!config.token || !config.fileName || !config.adminPassword) {
-      this.showMessage("访问令牌、文件名称和管理员密码不能为空", "error");
+      this.showMessage("访问 Token、文件名和管理员密码不能为空。", "error");
       return;
     }
 
@@ -845,23 +1245,22 @@ class ConfigManager {
       const configResult = await configResponse.json();
       const scriptResult = await scriptResponse.json();
 
-      if (configResponse.ok && scriptResponse.ok) {
-        this.showMessage("配置保存成功！", "success");
-        this.currentConfig = configResult.config || config;
-        closeModal("configModal");
-      } else {
-        const errorMsg = configResult.error || scriptResult.error || "保存失败";
-        this.showMessage("保存失败：" + errorMsg, "error");
+      if (!configResponse.ok || !scriptResponse.ok) {
+        throw new Error(configResult.error || scriptResult.error || "保存失败");
       }
+
+      this.currentConfig = configResult.config || config;
+      closeModal("configModal");
+      this.showMessage("系统配置已保存。", "success");
     } catch (error) {
-      this.showMessage("保存失败：" + error.message, "error");
+      this.showMessage(`保存失败：${error.message}`, "error");
     }
   }
 
   resetConfig() {
     openConfirmModal(
-      "确认重置",
-      "确定要重置配置为默认值吗？",
+      "恢复默认配置",
+      "确定要把系统配置恢复为默认值吗？这不会覆盖当前扩展脚本。",
       async () => {
         try {
           const response = await fetch("/api/config/reset", {
@@ -869,15 +1268,14 @@ class ConfigManager {
           });
 
           const result = await response.json();
-
-          if (response.ok) {
-            this.showMessage("配置重置成功！", "success");
-            this.populateForm(result.config, this.extensionScriptEditor.getValue());
-          } else {
-            this.showMessage("重置失败：" + result.error, "error");
+          if (!response.ok) {
+            throw new Error(result.error || "重置失败");
           }
+
+          this.populateForm(result.config, this.extensionScriptEditor.getValue());
+          this.showMessage("系统配置已恢复默认值。", "success");
         } catch (error) {
-          this.showMessage("重置失败：" + error.message, "error");
+          this.showMessage(`重置失败：${error.message}`, "error");
         }
       }
     );
@@ -887,14 +1285,8 @@ class ConfigManager {
     return this.currentConfig?.defaultPreviewFormat || "ss";
   }
 
-  showMessage(message, type) {
+  showMessage(message, type = "info") {
     createGlobalToast(message, type);
-  }
-
-  escapeHtml(text) {
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
   }
 }
 
@@ -904,99 +1296,215 @@ class GroupManager {
     this.currentGroup = null;
   }
 
-  async init() {
-    await this.loadGroups();
+  init() {
     this.bindEvents();
+    this.loadGroups().catch((error) => {
+      console.error("Failed to initialize groups:", error);
+    });
   }
 
   bindEvents() {
-    document
-      .getElementById("groupEditForm")
-      ?.addEventListener("submit", (e) => {
-        e.preventDefault();
-        this.saveGroup();
-      });
+    document.getElementById("groupEditForm")?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      this.saveGroup();
+    });
   }
 
-  async loadGroups() {
+  hasGroups() {
+    return this.groups.length > 0;
+  }
+
+  async loadGroups(preferredGroupId = null) {
     try {
       const response = await fetch("/api/groups");
-      if (!response.ok) throw new Error("获取分组列表失败");
-      this.groups = await response.json();
+      if (!response.ok) {
+        throw new Error("获取分组列表失败");
+      }
 
+      this.groups = await response.json();
       this.renderGroupSelect();
 
-      // 默认选择第一个分组
-      if (this.groups.length > 0 && !this.currentGroup) {
-        await this.onGroupChange(this.groups[0].id);
+      if (!this.groups.length) {
+        this.currentGroup = null;
+        subscriptionManager.setGroup(null, null);
+        subscriptionManager.clearSubscriptions();
+        this.renderCurrentGroupSummary(0);
+        this.renderGroupList();
+        return;
       }
+
+      const candidateId =
+        preferredGroupId ||
+        this.currentGroup?.id ||
+        this.groups[0]?.id;
+
+      const nextGroup =
+        this.groups.find((group) => String(group.id) === String(candidateId)) ||
+        this.groups[0];
+
+      this.renderGroupList();
+      await this.onGroupChange(nextGroup.id);
     } catch (error) {
-      console.error("加载分组失败:", error);
+      console.error("Failed to load groups:", error);
+      createGlobalToast(`加载分组失败：${error.message}`, "error");
     }
   }
 
   renderGroupSelect() {
     const select = document.getElementById("groupSelect");
-    if (!select) return;
+    if (!select) {
+      return;
+    }
 
+    if (!this.groups.length) {
+      select.innerHTML = '<option value="">暂无分组</option>';
+      select.disabled = true;
+      CustomSelect.syncById("groupSelect");
+      return;
+    }
+
+    select.disabled = false;
     select.innerHTML = this.groups
-      .map(
-        (g) =>
-          `<option value="${g.id}" ${
-            this.currentGroup && this.currentGroup.id === g.id
-              ? "selected"
-              : ""
-          }>${g.name}</option>`
-      )
+      .map((group) => {
+        const selected =
+          this.currentGroup && String(this.currentGroup.id) === String(group.id)
+            ? "selected"
+            : "";
+        return `<option value="${group.id}" ${selected}>${escapeHtml(group.name)}</option>`;
+      })
       .join("");
+    CustomSelect.syncById("groupSelect");
+  }
+
+  renderCurrentGroupSummary(subscriptionCount = 0) {
+    const groupName = document.getElementById("selectedGroupName");
+    const groupHint = document.getElementById("selectedGroupHint");
+    const groupStatus = document.getElementById("selectedGroupStatus");
+    const groupLink = document.getElementById("selectedGroupLink");
+    const groupToken = document.getElementById("selectedGroupToken");
+    const groupCount = document.getElementById("selectedGroupCount");
+
+    if (!this.currentGroup) {
+      groupName.textContent = this.hasGroups() ? "未选择分组" : "还没有分组";
+      groupHint.textContent = this.hasGroups()
+        ? "请选择一个分组后再进行订阅管理。"
+        : "先创建一个分组，再开始整理订阅。";
+      groupStatus.textContent = "未连接";
+      groupStatus.classList.remove("is-active");
+      groupLink.value = "";
+      groupToken.textContent = "Token: --";
+      groupCount.textContent = "0 条订阅";
+      this.updateGroupActionState();
+      return;
+    }
+
+    groupName.textContent = this.currentGroup.name;
+    groupHint.textContent = "当前所有操作都会作用在这个分组上，新增订阅也会自动绑定到这里。";
+    groupStatus.textContent = "已连接";
+    groupStatus.classList.add("is-active");
+    groupLink.value = this.getCurrentGroupUrl();
+    groupToken.textContent = `Token: ${this.currentGroup.token}`;
+    groupCount.textContent = `${subscriptionCount} 条订阅`;
+    this.updateGroupActionState();
+  }
+
+  updateGroupActionState() {
+    const disabled = !this.currentGroup;
+    document.querySelectorAll("[data-group-required]").forEach((element) => {
+      element.disabled = disabled;
+    });
   }
 
   async onGroupChange(groupId) {
-    const group = this.groups.find((g) => g.id == groupId);
-    if (!group) return;
+    const group = this.groups.find((item) => String(item.id) === String(groupId));
+    if (!group) {
+      this.currentGroup = null;
+      subscriptionManager.setGroup(null, null);
+      subscriptionManager.clearSubscriptions();
+      this.renderCurrentGroupSummary(0);
+      this.renderGroupList();
+      return;
+    }
 
     this.currentGroup = group;
+    document.getElementById("groupSelect").value = String(group.id);
+    CustomSelect.syncById("groupSelect");
     subscriptionManager.setGroup(group.id, group.token);
+    this.renderCurrentGroupSummary(subscriptionManager.subscriptions.length);
+    this.renderGroupList();
     await subscriptionManager.loadSubscriptions();
   }
 
-  copyGroupToken() {
+  getCurrentGroupUrl() {
     if (!this.currentGroup) {
-      createGlobalToast("请先选择分组", "error");
-      return;
+      return "";
     }
-    const url = `${window.location.origin}/${this.currentGroup.token}`;
-    navigator.clipboard
-      .writeText(url)
-      .then(() => createGlobalToast("订阅链接已复制到剪贴板", "success"))
-      .catch(() => createGlobalToast("复制失败，请手动复制", "error"));
+
+    return `${window.location.origin}/${this.currentGroup.token}`;
   }
 
-  // 分组管理弹窗
-  async renderGroupList() {
-    const container = document.getElementById("groupList");
-    if (!container) return;
+  async copyGroupToken() {
+    if (!this.currentGroup) {
+      createGlobalToast("请先选择一个分组。", "error");
+      return;
+    }
 
-    if (this.groups.length === 0) {
-      container.innerHTML = '<div class="no-subscriptions">暂无分组</div>';
+    try {
+      await navigator.clipboard.writeText(this.getCurrentGroupUrl());
+      createGlobalToast("分组订阅地址已复制。", "success");
+    } catch (error) {
+      console.error("Failed to copy group token:", error);
+      createGlobalToast("复制失败，请手动复制。", "error");
+    }
+  }
+
+  renderGroupList() {
+    const container = document.getElementById("groupList");
+    if (!container) {
+      return;
+    }
+
+    if (!this.groups.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div>
+            <strong>还没有分组</strong>
+            <p>先建一个分组，再把订阅按用途或来源组织起来。</p>
+            <button type="button" class="btn btn-primary" onclick="groupManager.openAddGroupModal()">新建分组</button>
+          </div>
+        </div>
+      `;
       return;
     }
 
     container.innerHTML = this.groups
-      .map(
-        (g) => `
-        <div class="group-item">
-          <div class="group-item-info">
-            <div class="group-item-name">📁 ${this.escapeHtml(g.name)}</div>
-            <div class="group-item-token">Token: ${this.escapeHtml(g.token)}</div>
+      .map((group) => {
+        const isCurrent =
+          this.currentGroup && String(this.currentGroup.id) === String(group.id);
+
+        return `
+          <div class="group-item">
+            <div class="group-item-info">
+              <div class="group-item-name">
+                ${escapeHtml(group.name)}
+                ${isCurrent ? '<span class="status-chip is-active">当前分组</span>' : ""}
+              </div>
+              <div class="group-item-token">${escapeHtml(group.token)}</div>
+            </div>
+            <div class="group-item-actions">
+              <button type="button" class="btn btn-neutral btn-sm" onclick="groupManager.onGroupChange(${group.id})">
+                切换
+              </button>
+              <button type="button" class="btn btn-primary btn-sm" onclick="groupManager.openEditGroupModal(${group.id})">
+                编辑
+              </button>
+              <button type="button" class="btn btn-danger btn-sm" onclick="groupManager.deleteGroup(${group.id}, '${escapeJs(group.name)}')">
+                删除
+              </button>
+            </div>
           </div>
-          <div class="group-item-actions">
-            <button class="btn btn-primary btn-sm" onclick="groupManager.openEditGroupModal(${g.id})">编辑</button>
-            <button class="btn btn-sm btn-danger" onclick="groupManager.deleteGroup(${g.id}, '${this.escapeJs(g.name)}')">删除</button>
-          </div>
-        </div>
-      `
-      )
+        `;
+      })
       .join("");
   }
 
@@ -1004,26 +1512,27 @@ class GroupManager {
     document.getElementById("groupEdit-id").value = "";
     document.getElementById("groupEdit-name").value = "";
     document.getElementById("groupEdit-token").value = "";
-    document.getElementById("groupEditTitle").textContent = "➕ 新建分组";
+    document.getElementById("groupEditTitle").textContent = "新建分组";
     openModal("groupEditModal");
   }
 
   openEditGroupModal(id) {
-    const group = this.groups.find((g) => g.id == id);
-    if (!group) return;
+    const group = this.groups.find((item) => String(item.id) === String(id));
+    if (!group) {
+      return;
+    }
 
     document.getElementById("groupEdit-id").value = group.id;
     document.getElementById("groupEdit-name").value = group.name;
     document.getElementById("groupEdit-token").value = group.token;
-    document.getElementById("groupEditTitle").textContent = "✏️ 编辑分组";
+    document.getElementById("groupEditTitle").textContent = "编辑分组";
     openModal("groupEditModal");
   }
 
   generateToken() {
-    const chars =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     let token = "";
-    for (let i = 0; i < 16; i++) {
+    for (let index = 0; index < 16; index += 1) {
       token += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     document.getElementById("groupEdit-token").value = token;
@@ -1035,269 +1544,235 @@ class GroupManager {
     const token = document.getElementById("groupEdit-token").value.trim();
 
     if (!name || !token) {
-      createGlobalToast("分组名称和 Token 不能为空", "error");
+      createGlobalToast("分组名称和 Token 不能为空。", "error");
       return;
     }
 
-    try {
-      const isEdit = !!id;
-      const url = isEdit ? `/api/groups/${id}` : "/api/groups";
-      const method = isEdit ? "PUT" : "POST";
+    const isEdit = Boolean(id);
 
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
+    try {
+      const response = await fetch(isEdit ? `/api/groups/${id}` : "/api/groups", {
+        method: isEdit ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ name, token }),
       });
 
       const result = await response.json();
-
-      if (response.ok) {
-        createGlobalToast(isEdit ? "分组更新成功！" : "分组创建成功！", "success");
-        closeModal("groupEditModal");
-        await this.loadGroups();
-        this.renderGroupList();
-      } else {
-        createGlobalToast("操作失败：" + result.error, "error");
+      if (!response.ok) {
+        throw new Error(result.error || "保存分组失败");
       }
+
+      closeModal("groupEditModal");
+      createGlobalToast(isEdit ? "分组已更新。" : "分组已创建。", "success");
+      await this.loadGroups(isEdit ? id : result.data.id);
     } catch (error) {
-      createGlobalToast("操作失败：" + error.message, "error");
+      createGlobalToast(`保存失败：${error.message}`, "error");
     }
   }
 
   deleteGroup(id, name) {
     openConfirmModal(
-      "确认删除",
-      `确定要删除分组 "${name}" 吗？<br><span style='color: #666; font-size: 13px;'>分组下的订阅关联将被清除，但订阅本身不会被删除。</span>`,
+      "删除分组",
+      `确定要删除「${escapeHtml(name)}」吗？分组内的订阅关联会被清空，但订阅本身不会被删除。`,
       async () => {
         try {
           const response = await fetch(`/api/groups/${id}`, {
             method: "DELETE",
           });
-          const result = await response.json();
 
-          if (response.ok) {
-            createGlobalToast("分组删除成功！", "success");
-            // 如果删除的是当前选中的分组，切换到第一个
-            if (this.currentGroup && this.currentGroup.id == id) {
-              this.currentGroup = null;
-            }
-            await this.loadGroups();
-            this.renderGroupList();
-          } else {
-            createGlobalToast("删除失败：" + result.error, "error");
+          const result = await response.json();
+          if (!response.ok) {
+            throw new Error(result.error || "删除分组失败");
           }
+
+          createGlobalToast("分组已删除。", "success");
+
+          if (this.currentGroup && String(this.currentGroup.id) === String(id)) {
+            this.currentGroup = null;
+          }
+
+          await this.loadGroups();
         } catch (error) {
-          createGlobalToast("删除失败：" + error.message, "error");
+          createGlobalToast(`删除失败：${error.message}`, "error");
         }
       }
     );
   }
 
-  // 绑定订阅弹窗
   async openAttachModal() {
     if (!this.currentGroup) {
-      createGlobalToast("请先选择分组", "error");
+      createGlobalToast("请先选择一个分组。", "error");
       return;
     }
 
     const container = document.getElementById("attachSubList");
-    container.innerHTML = '<div class="loading">加载中...</div>';
+    container.innerHTML = '<div class="loading">正在加载可绑定的订阅...</div>';
     openModal("attachSubModal");
 
     try {
-      // 获取所有订阅和当前分组的订阅
       const [allResponse, groupResponse] = await Promise.all([
         fetch("/api/subscriptions"),
         fetch(`/api/groups/${this.currentGroup.id}/subscriptions`),
       ]);
 
-      const allSubs = await allResponse.json();
-      const groupSubs = await groupResponse.json();
-      const groupSubIds = new Set(groupSubs.map((s) => s.id));
+      if (!allResponse.ok || !groupResponse.ok) {
+        throw new Error("读取订阅信息失败");
+      }
 
-      // 筛选出未绑定的订阅
-      const unbound = allSubs.filter((s) => !groupSubIds.has(s.id));
+      const allSubscriptions = await allResponse.json();
+      const currentSubscriptions = await groupResponse.json();
+      const boundIds = new Set(currentSubscriptions.map((item) => Number(item.id)));
+      const unboundSubscriptions = allSubscriptions.filter(
+        (item) => !boundIds.has(Number(item.id))
+      );
 
-      if (unbound.length === 0) {
-        container.innerHTML =
-          '<div class="no-subscriptions">所有订阅都已绑定到当前分组</div>';
+      if (!unboundSubscriptions.length) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div>
+              <strong>没有可绑定的订阅</strong>
+              <p>所有订阅都已经绑定到当前分组，或者你还没有创建新的订阅。</p>
+            </div>
+          </div>
+        `;
         return;
       }
 
-      container.innerHTML = unbound
-        .map(
-          (sub) => `
+      container.innerHTML = unboundSubscriptions
+        .map((subscription) => `
           <div class="attach-sub-item">
             <div class="attach-sub-info">
-              <span class="attach-sub-name">${this.escapeHtml(sub.name)}</span>
-              <span class="attach-sub-type">${sub.type === "list" ? "节点列表" : "订阅"}</span>
+              <div class="attach-sub-name">${escapeHtml(subscription.name)}</div>
+              <span class="attach-sub-type">${normalizeType(subscription.type) === "list" ? "节点列表" : "订阅链接"}</span>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="groupManager.attachSubscription(${sub.id}, '${this.escapeJs(sub.name)}')">
+            <button
+              type="button"
+              class="btn btn-primary btn-sm"
+              onclick="groupManager.attachSubscription(${subscription.id}, '${escapeJs(subscription.name)}')"
+            >
               绑定
             </button>
           </div>
-        `
-        )
+        `)
         .join("");
     } catch (error) {
-      container.innerHTML =
-        '<div class="error">加载失败: ' + error.message + "</div>";
+      container.innerHTML = `
+        <div class="error-state">
+          <div>
+            <strong>加载失败</strong>
+            <p>${escapeHtml(error.message)}</p>
+          </div>
+        </div>
+      `;
     }
   }
 
   async attachSubscription(subscriptionId, name) {
-    if (!this.currentGroup) return;
+    if (!this.currentGroup) {
+      return;
+    }
 
     try {
-      const response = await fetch(
-        `/api/groups/${this.currentGroup.id}/subscriptions`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ subscriptionId }),
-        }
-      );
+      const response = await fetch(`/api/groups/${this.currentGroup.id}/subscriptions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ subscriptionId }),
+      });
 
       const result = await response.json();
-
-      if (response.ok) {
-        createGlobalToast(`"${name}" 已绑定到当前分组`, "success");
-        closeModal("attachSubModal");
-        await subscriptionManager.loadSubscriptions();
-      } else {
-        createGlobalToast("绑定失败：" + result.error, "error");
+      if (!response.ok) {
+        throw new Error(result.error || "绑定失败");
       }
+
+      closeModal("attachSubModal");
+      createGlobalToast(`已把「${name}」绑定到当前分组。`, "success");
+      await subscriptionManager.loadSubscriptions();
     } catch (error) {
-      createGlobalToast("绑定失败：" + error.message, "error");
+      createGlobalToast(`绑定失败：${error.message}`, "error");
     }
   }
 
   detachSubscription(subscriptionId, name) {
-    if (!this.currentGroup) return;
+    if (!this.currentGroup) {
+      return;
+    }
 
     openConfirmModal(
-      "确认解绑",
-      `确定要从当前分组中解绑订阅 "${name}" 吗？<br><span style='color: #666; font-size: 13px;'>订阅本身不会被删除，可以重新绑定。</span>`,
+      "解绑订阅",
+      `确定要把「${escapeHtml(name)}」从当前分组移除吗？订阅本身仍会保留。`,
       async () => {
         try {
           const response = await fetch(
             `/api/groups/${this.currentGroup.id}/subscriptions/${subscriptionId}`,
-            { method: "DELETE" }
+            {
+              method: "DELETE",
+            }
           );
-          const result = await response.json();
 
-          if (response.ok) {
-            createGlobalToast(`"${name}" 已从当前分组解绑`, "success");
-            await subscriptionManager.loadSubscriptions();
-          } else {
-            createGlobalToast("解绑失败：" + result.error, "error");
+          const result = await response.json();
+          if (!response.ok) {
+            throw new Error(result.error || "解绑失败");
           }
+
+          createGlobalToast(`已从当前分组解绑「${name}」。`, "success");
+          await subscriptionManager.loadSubscriptions();
         } catch (error) {
-          createGlobalToast("解绑失败：" + error.message, "error");
+          createGlobalToast(`解绑失败：${error.message}`, "error");
         }
       }
     );
   }
-
-  escapeHtml(text) {
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  escapeJs(text) {
-    return text
-      .replace(/\\/g, "\\\\")
-      .replace(/\r/g, "\\r")
-      .replace(/\n/g, "\\n")
-      .replace(/'/g, "\\'")
-      .replace(/"/g, '\\"');
-  }
 }
 
-// 初始化订阅管理器、配置管理器和分组管理器
 const subscriptionManager = new SubscriptionManager();
-subscriptionManager.init();
 const configManager = new ConfigManager();
 const groupManager = new GroupManager();
+
+CustomSelect.initAll();
+subscriptionManager.init();
+configManager.init();
 groupManager.init();
 
-// 检查登录状态
 async function checkAuthStatus() {
   try {
-    const response = await fetch("/api/auth/status");
+    const response = await fetch("/api/auth/status", { skipLoading: true });
     if (!response.ok) {
-      // 未登录或会话过期，跳转到登录页面
       window.location.href = "/login";
     }
   } catch (error) {
-    console.error("检查登录状态失败:", error);
+    console.error("Auth check failed:", error);
     window.location.href = "/login";
   }
 }
 
-// 登出功能
-// 登出功能
-function logout() {
-  openConfirmModal(
-    "确认登出",
-    "确定要登出吗？",
-    async () => {
-      try {
-        const response = await fetch("/api/auth/logout", {
-          method: "POST",
-        });
-
-        if (response.ok) {
-          window.location.href = "/login";
-        } else {
-          createGlobalToast("登出失败，请重试", "error");
-        }
-      } catch (error) {
-        console.error("登出失败:", error);
-        // 即使登出失败，也跳转到登录页面
-        window.location.href = "/login";
-      }
-    }
-  );
-}
-
-// 定期检查会话状态（每5分钟检查一次）
-setInterval(checkAuthStatus, 5 * 60 * 1000);
-
-// 页面加载时检查一次
-checkAuthStatus();
-
-// 全局模态框控制函数
 function openModal(modalId) {
-  document.getElementById(modalId).style.display = "block";
+  document.getElementById(modalId)?.classList.add("is-open");
 }
 
 function closeModal(modalId) {
-  document.getElementById(modalId).style.display = "none";
+  document.getElementById(modalId)?.classList.remove("is-open");
 }
 
-// 通用确认模态框函数
 function openConfirmModal(title, message, onConfirm) {
-  document.getElementById('confirmTitle').textContent = title;
-  document.getElementById('confirmMessage').innerHTML = message;
+  document.getElementById("confirmTitle").textContent = title;
+  document.getElementById("confirmMessage").innerHTML = message;
 
-  const confirmBtn = document.getElementById('confirmBtn');
-  // 克隆按钮以移除旧的事件监听器
-  const newBtn = confirmBtn.cloneNode(true);
-  confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+  const confirmButton = document.getElementById("confirmBtn");
+  const clonedButton = confirmButton.cloneNode(true);
+  confirmButton.parentNode.replaceChild(clonedButton, confirmButton);
 
-  newBtn.addEventListener('click', () => {
-    closeModal('confirmModal');
-    if (onConfirm) onConfirm();
+  clonedButton.addEventListener("click", async () => {
+    closeModal("confirmModal");
+    if (onConfirm) {
+      await onConfirm();
+    }
   });
 
-  openModal('confirmModal');
-}
-
-function closeModal(modalId) {
-  document.getElementById(modalId).style.display = "none";
+  openModal("confirmModal");
 }
 
 function openConfigModal() {
@@ -1309,142 +1784,95 @@ function openGroupManageModal() {
   groupManager.renderGroupList();
   openModal("groupManageModal");
 }
+
 function openAddModal() {
+  if (!groupManager.currentGroup) {
+    createGlobalToast("请先选择一个分组。", "error");
+    return;
+  }
+
   document.getElementById("addForm").reset();
-  const type = document.getElementById("modal-type")?.value || "subscription";
-  subscriptionManager.updateTypeUI("add", type);
+  document.getElementById("modal-type").value = "subscription";
+  CustomSelect.syncById("modal-type");
+  subscriptionManager.updateTypeUI("add", "subscription");
   openModal("addModal");
 }
 
 function openEditModal(id, name, url, description, type) {
+  const normalizedType = normalizeType(type);
   document.getElementById("edit-id").value = id;
   document.getElementById("edit-name").value = name;
   document.getElementById("edit-url").value = url;
   document.getElementById("edit-description").value = description;
-  const normalizedType = type === "node" ? "list" : (type || "subscription");
   document.getElementById("edit-type").value = normalizedType;
+  CustomSelect.syncById("edit-type");
   subscriptionManager.updateTypeUI("edit", normalizedType);
   openModal("editModal");
 }
 
-// 编辑订阅表单提交处理
-document
-  .getElementById("editForm")
-  .addEventListener("submit", async (e) => {
-    e.preventDefault();
+function focusGroupSelect() {
+  CustomSelect.focusById("groupSelect");
+}
 
-    const id = document.getElementById("edit-id").value;
-    const name = document.getElementById("edit-name").value.trim();
-    const url = document.getElementById("edit-url").value.trim();
-    const description = document
-      .getElementById("edit-description")
-      .value.trim();
-    const type = document.getElementById("edit-type").value;
-    const normalizedType = type === "node" ? "list" : type;
-    const urls = normalizedType === "list"
-      ? subscriptionManager.parseNodeUrls(url)
-      : [url];
-
-    if (!url) {
-      const label = normalizedType === "list" ? "节点列表" : "订阅";
-      subscriptionManager.showMessage(`${label}链接不能为空`, "error");
-      return;
-    }
-
-    const finalName =
-      name ||
-      (normalizedType === "list" ? "节点列表" : "");
-    if (!finalName) {
-      subscriptionManager.showMessage("请填写订阅名称", "error");
-      return;
-    }
-
-    const normalizedUrl = normalizedType === "list" ? urls.join("\n") : urls[0];
-
-    try {
-      const response = await fetch(`/api/subscriptions/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: finalName,
-          url: normalizedUrl,
-          description,
-          type: normalizedType,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        subscriptionManager.showMessage("订阅更新成功！", "success");
-        closeModal("editModal");
-        subscriptionManager.loadSubscriptions();
-      } else {
-        subscriptionManager.showMessage(
-          "更新失败：" + result.error,
-          "error"
-        );
-      }
-    } catch (error) {
-      subscriptionManager.showMessage(
-        "更新失败：" + error.message,
-        "error"
-      );
-    }
-  });
-
-// 移除点击模态框外部关闭功能，确保只能通过按钮关闭弹窗
-// 这样可以避免用户在编辑时意外关闭弹窗
-
-/* Toast Notification Logic */
-function createGlobalToast(message, type = 'info') {
-  let container = document.querySelector('.toast-container');
+function createGlobalToast(message, type = "info") {
+  let container = document.querySelector(".toast-container");
   if (!container) {
-    container = document.createElement('div');
-    container.className = 'toast-container';
+    container = document.createElement("div");
+    container.className = "toast-container";
     document.body.appendChild(container);
   }
 
-  const toast = document.createElement('div');
+  const toast = document.createElement("div");
   toast.className = `toast ${type}`;
 
-  // Icon map
   const icons = {
-    success: '✓',
-    error: '✕',
-    info: 'ℹ',
-    warning: '!'
-  };
-
-  // Safely escape HTML
-  const escapeHtml = (text) => {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    success: "✓",
+    error: "!",
+    info: "i",
   };
 
   toast.innerHTML = `
-        <div class="toast-icon">${icons[type] || icons.info}</div>
-        <div class="toast-content">${escapeHtml(message)}</div>
-        <button class="toast-close" onclick="this.parentElement.remove()">×</button>
-    `;
+    <div class="toast-icon">${icons[type] || icons.info}</div>
+    <div class="toast-content">${escapeHtml(message)}</div>
+    <button type="button" class="toast-close" aria-label="关闭">×</button>
+  `;
+
+  toast.querySelector(".toast-close").addEventListener("click", () => {
+    toast.remove();
+  });
 
   container.appendChild(toast);
 
-  // Trigger animation
   requestAnimationFrame(() => {
-    toast.classList.add('show');
+    toast.classList.add("show");
   });
 
-  // Auto remove
-  setTimeout(() => {
-    toast.classList.remove('show');
-    setTimeout(() => {
-      if (toast.parentElement) {
-        toast.remove();
-      }
-    }, 400); // Wait for transition
-  }, 5000);
+  window.setTimeout(() => {
+    toast.classList.remove("show");
+    window.setTimeout(() => {
+      toast.remove();
+    }, 240);
+  }, 4200);
 }
+
+function logout() {
+  openConfirmModal("退出登录", "确定要退出当前管理会话吗？", async () => {
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("退出失败");
+      }
+
+      window.location.href = "/login";
+    } catch (error) {
+      console.error("Logout failed:", error);
+      createGlobalToast("退出失败，请重试。", "error");
+    }
+  });
+}
+
+window.setInterval(checkAuthStatus, 5 * 60 * 1000);
+checkAuthStatus();
