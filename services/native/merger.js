@@ -5,12 +5,13 @@
 class NodeMerger {
     /**
      * 合并节点列表
-     * @param {Array<Array>} nodeLists - 多个节点列表
-     * @returns {Array} 合并后的节点列表
+     * @param {Array<object>} fetchResults - 多个订阅拉取结果
+     * @returns {{nodes: Array<object>, dedupReport: Array<object>}} 合并后的节点和去重报告
      */
     merge(fetchResults) {
         const allNodes = [];
         const seen = new Set();
+        const dedupGroups = new Map();
 
         for (const result of fetchResults) {
             const nodes = result.nodes || [];
@@ -19,20 +20,32 @@ class NodeMerger {
                 if (!seen.has(key)) {
                     seen.add(key);
                     allNodes.push(node);
+                    dedupGroups.set(key, {
+                        key,
+                        kept: node,
+                        duplicates: [],
+                    });
+                    continue;
                 }
+
+                dedupGroups.get(key).duplicates.push(node);
             }
         }
 
         // 排序：按类型分组，同类型按名称排序
         allNodes.sort((a, b) => {
             if (a.type !== b.type) {
-                const typeOrder = { vmess: 1, vless: 2, trojan: 3, ss: 4 };
+                const typeOrder = { vmess: 1, vless: 2, trojan: 3, ss: 4, hysteria2: 5 };
                 return (typeOrder[a.type] || 99) - (typeOrder[b.type] || 99);
             }
-            return (a.name || '').localeCompare(b.name || '');
+            return (a.name || "").localeCompare(b.name || "");
         });
 
-        return allNodes;
+        const dedupReport = Array.from(dedupGroups.values())
+            .filter((group) => group.duplicates.length > 0)
+            .sort((a, b) => a.key.localeCompare(b.key));
+
+        return { nodes: allNodes, dedupReport };
     }
 
     /**
@@ -41,29 +54,28 @@ class NodeMerger {
      * @returns {string} 唯一标识
      */
     generateNodeKey(node) {
-        // 使用 server + port + type 作为唯一标识
         return `${node.type}:${node.server}:${node.port}`;
     }
 
     /**
      * 按类型过滤节点
-     * @param {Array} nodes - 节点列表
+     * @param {Array<object>} nodes - 节点列表
      * @param {string} type - 节点类型
-     * @returns {Array} 过滤后的节点列表
+     * @returns {Array<object>} 过滤后的节点列表
      */
     filterByType(nodes, type) {
-        return nodes.filter(node => node.type === type);
+        return nodes.filter((node) => node.type === type);
     }
 
     /**
      * 获取节点统计信息
-     * @param {Array} nodes - 节点列表
-     * @returns {object} 统计信息
+     * @param {Array<object>} nodes - 节点列表
+     * @returns {{total: number, byType: Record<string, number>}} 统计信息
      */
     getStats(nodes) {
         const stats = {
             total: nodes.length,
-            byType: {}
+            byType: {},
         };
 
         for (const node of nodes) {
