@@ -3,6 +3,8 @@ const assert = require("node:assert/strict");
 
 const NodeMerger = require("../../services/native/merger");
 const NativeConverter = require("../../services/native");
+const BaseGenerator = require("../../services/native/generators/base");
+const ClashGenerator = require("../../services/native/generators/clash");
 
 test("merge returns kept nodes and duplicate groups", () => {
   const merger = new NodeMerger();
@@ -105,4 +107,82 @@ test("summarizeNodeDifference reports fragment-only differences", () => {
     converter.summarizeNodeDifference(kept, duplicate),
     '差异: 仅 fragment/name 不同，保留="日本01"，重复="日本02"',
   );
+});
+test("base generator auditValidNodes reports missing field reasons", () => {
+  class TestGenerator extends BaseGenerator {}
+
+  const generator = new TestGenerator();
+  const result = generator.auditValidNodes([
+    null,
+    { type: "vmess", name: "missing-server", port: 443 },
+    { type: "vless", name: "missing-port", server: "a.example.com" },
+    { type: "trojan", name: "valid", server: "b.example.com", port: 443 },
+  ]);
+
+  assert.equal(result.validNodes.length, 1);
+  assert.deepEqual(
+    result.discarded.map((item) => item.reason),
+    ["empty-node", "missing-server", "missing-port"],
+  );
+});
+
+test("clash generator audit reports unsupported types and generation failures", () => {
+  const generator = new ClashGenerator();
+  const originalConvert = generator.convertToProxy;
+
+  generator.convertToProxy = function convertForTest(node) {
+    if (node.name === "broken-vmess") {
+      throw new Error("boom");
+    }
+    return originalConvert.call(this, node);
+  };
+
+  const result = generator.generateWithAudit([
+    {
+      type: "vmess",
+      name: "ok-vmess",
+      server: "ok.example.com",
+      port: 443,
+      uuid: "11111111-1111-1111-1111-111111111111",
+      tls: true,
+      network: "tcp",
+    },
+    {
+      type: "hysteria",
+      name: "unsupported",
+      server: "nope.example.com",
+      port: 443,
+    },
+    {
+      type: "vmess",
+      name: "broken-vmess",
+      server: "broken.example.com",
+      port: 443,
+      uuid: "22222222-2222-2222-2222-222222222222",
+      tls: true,
+      network: "tcp",
+    },
+  ]);
+
+  assert.equal(result.validNodes.length, 3);
+  assert.equal(result.generatedNodes.length, 1);
+  assert.equal(result.discarded.length, 2);
+  assert.deepEqual(
+    result.discarded.map((item) => item.reason).sort(),
+    ["convert-error", "unsupported-type"],
+  );
+});
+
+test("native converter groups discarded nodes by reason and type", () => {
+  const converter = new NativeConverter();
+  const stats = converter.groupDiscardedNodes([
+    { reason: "deduplicated", type: "vmess" },
+    { reason: "deduplicated", type: "vmess" },
+    { reason: "missing-port", type: "vless" },
+  ]);
+
+  assert.deepEqual(stats, {
+    deduplicated: { total: 2, byType: { vmess: 2 } },
+    "missing-port": { total: 1, byType: { vless: 1 } },
+  });
 });

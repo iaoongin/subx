@@ -35,7 +35,43 @@ class BaseGenerator {
      * @returns {Array} 有效节点列表
      */
     filterValidNodes(nodes) {
-        return nodes.filter(node => node && node.server && node.port);
+        return this.auditValidNodes(nodes).validNodes;
+    }
+
+    auditValidNodes(nodes) {
+        const validNodes = [];
+        const discarded = [];
+
+        for (const node of nodes || []) {
+            if (!node) {
+                discarded.push(this.describeDiscardedNode(node, 'empty-node'));
+                continue;
+            }
+
+            if (!node.server) {
+                discarded.push(this.describeDiscardedNode(node, 'missing-server'));
+                continue;
+            }
+
+            if (node.port === undefined || node.port === null || node.port === '') {
+                discarded.push(this.describeDiscardedNode(node, 'missing-port'));
+                continue;
+            }
+
+            validNodes.push(node);
+        }
+
+        return { validNodes, discarded };
+    }
+
+    describeDiscardedNode(node, reason) {
+        return {
+            reason,
+            type: node?.type || 'unknown',
+            name: node?.name || '',
+            server: node?.server || '',
+            port: node?.port ?? null,
+        };
     }
 }
 

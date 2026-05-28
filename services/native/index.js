@@ -1,6 +1,6 @@
 /**
- * 原生订阅转换器
- * 负责协调订阅拉取、节点解析、节点合并和格式生成
+ * Native subscription converter
+ * Coordinates fetch, parse, merge, and format generation.
  */
 const SubscriptionFetcher = require("./fetcher");
 const NodeMerger = require("./merger");
@@ -12,20 +12,14 @@ class NativeConverter {
     this.merger = new NodeMerger();
   }
 
-  /**
-   * 转换订阅
-   * @param {Array<string>} subscriptionUrls - 订阅 URL 列表
-   * @param {string} targetFormat - 目标格式 (ss/clash/v2ray)
-   * @returns {Promise<string>} 转换后的订阅内容
-   */
   async convert(subscriptionUrls, targetFormat) {
     let currentStep = "init";
     try {
-      console.log("========== 原生转换开始 ==========");
-      console.log(`订阅源数量: ${subscriptionUrls.length}, 目标格式: ${targetFormat}`);
+      console.log("========== Native conversion start ==========");
+      console.log(`sources=${subscriptionUrls.length}, targetFormat=${targetFormat}`);
 
       currentStep = "fetch-subscriptions";
-      console.log("[步骤 1] 拉取订阅源...");
+      console.log("[step 1] fetching subscriptions...");
       const fetchResults = await Promise.all(
         subscriptionUrls.map((url) => this.fetcher.fetch(url)),
       );
@@ -50,10 +44,10 @@ class NativeConverter {
           totalFailures += failureCount;
           this.mergeStats(fetchedTypeStats, typeStats);
 
-          const failInfo = failureCount > 0 ? `, 解析失败 ${failureCount}` : "";
-          const typeSuffix = typeInfo ? `, 协议: ${typeInfo}` : "";
+          const failInfo = failureCount > 0 ? `, parseFailed=${failureCount}` : "";
+          const typeSuffix = typeInfo ? `, byType=${typeInfo}` : "";
           console.log(
-            `  订阅 ${i + 1}: 成功 ${nodeCount} 个节点${failInfo}${typeSuffix} [${result.format}] ${shortUrl}`,
+            `  source ${i + 1}: success nodes=${nodeCount}${failInfo}${typeSuffix} [${result.format}] ${shortUrl}`,
           );
 
           if (failureCount > 0) {
@@ -64,31 +58,33 @@ class NativeConverter {
           }
         } else {
           failCount++;
-          console.error(`  订阅 ${i + 1}: 拉取失败 - ${result.error} ${shortUrl}`);
+          console.error(`  source ${i + 1}: fetch failed - ${result.error} ${shortUrl}`);
           if (result.attempts && result.attempts.length > 0) {
             result.attempts.forEach((attempt) => console.error(`    - ${attempt}`));
           }
         }
       }
 
-      const fetchedTypeInfo = this.formatStats(fetchedTypeStats);
       console.log(
-        `拉取汇总: 订阅 ${fetchResults.length}, 成功 ${successCount}, 失败 ${failCount}, 节点 ${totalNodes}, 解析失败 ${totalFailures}${fetchedTypeInfo ? `, 协议: ${fetchedTypeInfo}` : ""}`,
+        `fetch summary: subscriptions=${fetchResults.length}, success=${successCount}, failed=${failCount}, nodes=${totalNodes}, parseFailed=${totalFailures}${this.formatStats(fetchedTypeStats) ? `, byType=${this.formatStats(fetchedTypeStats)}` : ""}`,
       );
+      this.logAuditStage("fetched", this.getCountSummaryFromTypeStats(fetchedTypeStats));
 
       currentStep = "merge-nodes";
-      console.log("[步骤 2] 合并节点...");
+      console.log("[step 2] merging nodes...");
       const mergeResult = this.merger.merge(fetchResults);
       const allNodes = mergeResult.nodes;
       const dedupReport = mergeResult.dedupReport;
 
       if (allNodes.length === 0) {
-        throw new Error("未解析到任何有效节点");
+        throw new Error("no valid nodes parsed");
       }
 
-      const stats = this.merger.getStats(allNodes);
-      const mergedTypeStr = this.formatStats(stats.byType);
-      console.log(`合并去重后: 总计 ${stats.total}${mergedTypeStr ? `，协议: ${mergedTypeStr}` : ""}`);
+      const mergedStats = this.merger.getStats(allNodes);
+      console.log(
+        `merge summary: total=${mergedStats.total}${this.formatStats(mergedStats.byType) ? `, byType=${this.formatStats(mergedStats.byType)}` : ""}`,
+      );
+      this.logAuditStage("merged", mergedStats);
 
       if (dedupReport.length > 0) {
         const duplicateTypeStats = this.countDuplicateTypes(dedupReport);
@@ -96,53 +92,66 @@ class NativeConverter {
         const duplicateTypeStr = this.formatStats(duplicateTypeStats);
 
         console.log(
-          `去重明细: 重复 ${duplicateCount} 条，分组 ${dedupReport.length}${duplicateTypeStr ? `，协议: ${duplicateTypeStr}` : ""}`,
+          `dedup detail: duplicates=${duplicateCount}, groups=${dedupReport.length}${duplicateTypeStr ? `, byType=${duplicateTypeStr}` : ""}`,
         );
 
         for (const group of dedupReport) {
-          console.log(`  去重键: ${group.key}`);
-          console.log(`    保留 ${this.formatNodeRecord(group.kept)}`);
+          console.log(`  dedup key ${group.key}`);
+          console.log(`    kept ${this.formatNodeRecord(group.kept)}`);
           for (const duplicate of group.duplicates) {
-            console.log(`    重复 ${this.formatNodeRecord(duplicate)}`);
+            console.log(`    dropped ${this.formatNodeRecord(duplicate)}`);
             console.log(`      ${this.summarizeNodeDifference(group.kept, duplicate)}`);
           }
         }
       }
 
       currentStep = "generate-output";
-      console.log(`[步骤 3] 生成 ${targetFormat} 格式...`);
+      console.log(`[step 3] generating ${targetFormat} format...`);
       const Generator = this.getGenerator(targetFormat);
       if (!Generator) {
-        throw new Error(`不支持的格式: ${targetFormat}`);
+        throw new Error(`unsupported format: ${targetFormat}`);
       }
 
       const generator = new Generator();
-      const validNodes = generator.filterValidNodes(allNodes);
-      const result = generator.generate(allNodes);
+      const generatorAudit =
+        typeof generator.generateWithAudit === "function"
+          ? generator.generateWithAudit(allNodes)
+          : null;
 
-      const outputStats = this.getOutputStats(targetFormat, result, validNodes);
+      const validNodes = generatorAudit
+        ? generatorAudit.validNodes
+        : generator.filterValidNodes(allNodes);
+      const result = generatorAudit ? generatorAudit.content : generator.generate(allNodes);
+      const generatedNodes = generatorAudit ? generatorAudit.generatedNodes : validNodes;
+
+      this.logAuditStage("valid", {
+        total: validNodes.length,
+        byType: this.countNodesByType(validNodes),
+      });
+
+      const outputStats = this.getOutputStats(targetFormat, result, generatedNodes);
       if (outputStats) {
         const total = Object.values(outputStats).reduce((sum, count) => sum + count, 0);
-        const outputTypeStr = this.formatStats(outputStats);
-        console.log(`输出协议统计: 总计 ${total}${outputTypeStr ? `，协议: ${outputTypeStr}` : ""}`);
+        this.logAuditStage("generated", { total, byType: outputStats }, ` format=${targetFormat}`);
       }
 
-      console.log("========== 原生转换完成 ==========\n");
+      const discardedNodes = [
+        ...this.flattenDedupDiscarded(dedupReport),
+        ...(generatorAudit ? generatorAudit.discarded : []),
+      ];
+      this.logDiscardSummary(discardedNodes);
+
+      console.log("========== Native conversion done ==========\n");
       return result;
     } catch (error) {
       console.error(
-        `原生转换失败 [step=${currentStep}] [targetFormat=${targetFormat}] [sources=${subscriptionUrls.length}]:`,
+        `Native conversion failed [step=${currentStep}] [targetFormat=${targetFormat}] [sources=${subscriptionUrls.length}]:`,
         error,
       );
       throw error;
     }
   }
 
-  /**
-   * 获取生成器类
-   * @param {string} format - 格式名称
-   * @returns {Class|null} 生成器类
-   */
   getGenerator(format) {
     const formatMap = {
       ss: generators.SSGenerator,
@@ -255,6 +264,63 @@ class NativeConverter {
     }
 
     return this.countNodesByType(nodes);
+  }
+
+  flattenDedupDiscarded(dedupReport) {
+    const discarded = [];
+    for (const group of dedupReport || []) {
+      for (const node of group.duplicates || []) {
+        discarded.push({
+          reason: "deduplicated",
+          type: node?.type || "unknown",
+          name: node?.name || "",
+          server: node?.server || "",
+          port: node?.port ?? null,
+        });
+      }
+    }
+    return discarded;
+  }
+
+  groupDiscardedNodes(discardedNodes) {
+    const grouped = {};
+
+    for (const item of discardedNodes || []) {
+      const reason = item?.reason || "unknown";
+      const type = item?.type || "unknown";
+
+      if (!grouped[reason]) {
+        grouped[reason] = { total: 0, byType: {} };
+      }
+
+      grouped[reason].total += 1;
+      grouped[reason].byType[type] = (grouped[reason].byType[type] || 0) + 1;
+    }
+
+    return grouped;
+  }
+
+  logAuditStage(stage, stats, extra = "") {
+    const total = stats?.total || 0;
+    const byType = this.formatStats(stats?.byType || {});
+    console.log(
+      `[native-audit] stage=${stage}${extra} total=${total}${byType ? ` byType=${byType}` : ""}`,
+    );
+  }
+
+  logDiscardSummary(discardedNodes) {
+    const grouped = this.groupDiscardedNodes(discardedNodes);
+    for (const [reason, summary] of Object.entries(grouped)) {
+      const byType = this.formatStats(summary.byType);
+      console.log(
+        `[native-audit] discard reason=${reason} total=${summary.total}${byType ? ` byType=${byType}` : ""}`,
+      );
+    }
+  }
+
+  getCountSummaryFromTypeStats(byType) {
+    const total = Object.values(byType || {}).reduce((sum, count) => sum + count, 0);
+    return { total, byType: byType || {} };
   }
 }
 
