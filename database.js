@@ -20,6 +20,7 @@ class Database {
         total: 99,
         timestamp: 4102329600000,
         adminPassword: "",
+        loginDisabled: false,
         conversionMode: "remote",
         fallbackEnabled: true,
         nativeConverterEnabled: true,
@@ -65,7 +66,8 @@ class Database {
 
   migrateConfig() {
     let needsSave = false;
-    const defaultConversionConfig = {
+    const defaultConfig = {
+      loginDisabled: false,
       conversionMode: "remote",
       fallbackEnabled: true,
       nativeConverterEnabled: true,
@@ -74,7 +76,7 @@ class Database {
       defaultPreviewFormat: "ss",
     };
 
-    for (const [key, defaultValue] of Object.entries(defaultConversionConfig)) {
+    for (const [key, defaultValue] of Object.entries(defaultConfig)) {
       if (this.data.config[key] === undefined) {
         this.data.config[key] = defaultValue;
         needsSave = true;
@@ -219,6 +221,7 @@ class Database {
         total: 99,
         timestamp: 4102329600000,
         adminPassword: "admin123",
+        loginDisabled: false,
         conversionMode: "remote",
         fallbackEnabled: true,
         nativeConverterEnabled: true,
@@ -450,6 +453,7 @@ class Database {
           total: 99,
           timestamp: 4102329600000,
           adminPassword: "",
+          loginDisabled: false,
           conversionMode: "remote",
           fallbackEnabled: true,
           nativeConverterEnabled: true,

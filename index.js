@@ -4,7 +4,7 @@ const path = require("path");
 const session = require("express-session");
 const FileStore = require("session-file-store")(session);
 const Database = require("./database");
-const { checkAuthForAdmin, requireAuth } = require("./middleware/auth");
+const { createAuthMiddleware } = require("./middleware/auth");
 const { setConverterConfig } = require("./services/converter");
 const { getLocalIPAddresses } = require("./utils/network");
 
@@ -18,6 +18,7 @@ const createConversionRoutes = require("./routes/conversion");
 const app = express();
 const port = process.env.PORT || 3000;
 const db = new Database();
+const { checkAuthForAdmin, isLoginDisabled, requireAuth } = createAuthMiddleware(db);
 
 // 中间件
 app.use(express.json());
@@ -69,7 +70,7 @@ async function loadConfigFromDatabase() {
 loadConfigFromDatabase();
 
 // 注册路由
-app.use(createAuthRoutes(db, requireAuth));
+app.use(createAuthRoutes(db, requireAuth, isLoginDisabled));
 app.use(createSubscriptionRoutes(db));
 app.use(createGroupRoutes(db));
 app.use(createConfigRoutes(db));
