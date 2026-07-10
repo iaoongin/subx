@@ -15,36 +15,35 @@
         <h1>SubX 订阅工作台</h1>
         <p>轻松管理您的订阅链接，支持实时添加、编辑和删除</p>
       </div>
-      <div class="hero-actions">
-        <button type="button" class="hero-btn hero-btn-secondary" onclick="openGroupManageModal()">
-          管理分组
-        </button>
-        <button type="button" class="hero-btn hero-btn-secondary" onclick="openConfigModal()">
-          系统配置
-        </button>
-        <button type="button" class="hero-btn hero-btn-ghost" onclick="logout()">
-          退出登录
-        </button>
+      <div class="hero-right">
+        <div class="hero-actions">
+          <button type="button" class="hero-btn hero-btn-secondary" onclick="openGroupManageModal()">
+            管理分组
+          </button>
+          <button type="button" class="hero-btn hero-btn-secondary" onclick="openConfigModal()">
+            系统配置
+          </button>
+          <button type="button" class="hero-btn hero-btn-ghost" onclick="logout()">
+            退出登录
+          </button>
+        </div>
+        <div class="hero-stats">
+          <span class="hero-stat">
+            <span class="hero-stat-number" id="totalCount">0</span>
+            <span class="hero-stat-label">订阅</span>
+          </span>
+          <span class="hero-stat">
+            <span class="hero-stat-number hero-stat-active" id="activeCount">0</span>
+            <span class="hero-stat-label">启用</span>
+          </span>
+          <span class="hero-stat">
+            <span class="hero-stat-number hero-stat-inactive" id="inactiveCount">0</span>
+            <span class="hero-stat-label">停用</span>
+          </span>
+        </div>
       </div>
     </header>
 
-    <section class="stats">
-      <article class="stat-card">
-        <span class="stat-kicker">当前分组</span>
-        <div class="stat-number" id="totalCount">0</div>
-        <div class="stat-label">订阅总数</div>
-      </article>
-      <article class="stat-card">
-        <span class="stat-kicker">可用状态</span>
-        <div class="stat-number" id="activeCount">0</div>
-        <div class="stat-label">已启用</div>
-      </article>
-      <article class="stat-card">
-        <span class="stat-kicker">需要处理</span>
-        <div class="stat-number" id="inactiveCount">0</div>
-        <div class="stat-label">已停用</div>
-      </article>
-    </section>
 
     <main class="workspace-layout">
       <aside class="workspace-sidebar">
@@ -52,7 +51,6 @@
           <div class="panel-heading">
             <div>
               <h2>当前分组</h2>
-              <p>先确认你正在操作哪个订阅集合。</p>
             </div>
           </div>
 
@@ -67,7 +65,7 @@
             <div class="group-summary-header">
               <div>
                 <strong id="selectedGroupName">未选择分组</strong>
-                <p id="selectedGroupHint">选择一个分组后，这里会展示该分组的订阅地址和统计信息。</p>
+                <p id="selectedGroupHint" class="group-hint"></p>
               </div>
               <span id="selectedGroupStatus" class="status-chip">未连接</span>
             </div>
@@ -88,7 +86,7 @@
             </div>
           </div>
 
-          <div class="sidebar-actions">
+          <div class="sidebar-actions sidebar-actions-triple">
             <button type="button" class="section-action-btn" data-group-required onclick="subscriptionManager.previewSubscription()">
               预览订阅
             </button>
@@ -101,13 +99,10 @@
           </div>
         </section>
 
-        <section class="context-card">
-          <div class="panel-heading">
-            <div>
-              <h2>分组内操作</h2>
-              <p>新增订阅会自动绑定到当前分组，已有订阅也可以快速挂载进来。</p>
-            </div>
-          </div>
+        <div class="sidebar-divider"></div>
+
+        <div class="sidebar-inline-actions">
+          <h2>分组内操作</h2>
           <div class="sidebar-actions stacked">
             <button type="button" class="section-action-btn" data-group-required onclick="openAddModal()">
               新建订阅
@@ -116,7 +111,7 @@
               绑定已有订阅
             </button>
           </div>
-        </section>
+        </div>
       </aside>
 
       <section class="subscriptions-section">
@@ -133,24 +128,23 @@
         </div>
 
         <div class="subscriptions-toolbar">
-          <label class="search-field" for="subscriptionSearch">
-            <span>搜索</span>
-            <input id="subscriptionSearch" type="search" placeholder="按名称、描述或链接筛选" />
-          </label>
+          <input id="subscriptionSearch" type="search" placeholder="搜索订阅..." />
 
-          <div class="toolbar-filters">
-            <div class="filter-chip-group">
-              <button type="button" class="filter-chip is-active" data-status-filter="all">全部</button>
-              <button type="button" class="filter-chip" data-status-filter="active">启用中</button>
-              <button type="button" class="filter-chip" data-status-filter="inactive">已停用</button>
-            </div>
+          <div class="toolbar-divider"></div>
 
-            <select id="subscriptionTypeFilter">
-              <option value="all">全部类型</option>
-              <option value="subscription">订阅链接</option>
-              <option value="list">节点列表</option>
-            </select>
+          <div class="filter-chip-group">
+            <button type="button" class="filter-chip is-active" data-status-filter="all">全部</button>
+            <button type="button" class="filter-chip" data-status-filter="active">启用</button>
+            <button type="button" class="filter-chip" data-status-filter="inactive">停用</button>
           </div>
+
+          <div class="toolbar-divider"></div>
+
+          <select id="subscriptionTypeFilter">
+            <option value="all">全部类型</option>
+            <option value="subscription">订阅链接</option>
+            <option value="list">节点列表</option>
+          </select>
         </div>
 
         <div id="subscriptionsList">
