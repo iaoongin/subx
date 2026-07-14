@@ -1,4 +1,5 @@
 let loadingRequestCount = 0;
+const THEME_STORAGE_KEY = "subx-theme";
 
 const DEFAULT_EXTENSION_SCRIPT = `function main(config, profileName) {
   const content = JSON.parse(JSON.stringify(config));
@@ -44,6 +45,36 @@ function hideLoading() {
 function normalizeType(type) {
   if (type === "node") return "list";
   return type || "subscription";
+}
+
+function getTheme() {
+  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+}
+
+function applyTheme(theme, persist = false) {
+  const activeTheme = theme === "light" ? "light" : "dark";
+  const isDark = activeTheme === "dark";
+  document.documentElement.dataset.theme = activeTheme;
+
+  const toggle = document.getElementById("themeToggle");
+  if (toggle) {
+    const targetLabel = isDark ? "切换至日间模式" : "切换至夜间模式";
+    toggle.setAttribute("aria-label", targetLabel);
+    toggle.setAttribute("title", targetLabel);
+    toggle.setAttribute("aria-pressed", String(isDark));
+  }
+
+  if (persist) {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, activeTheme);
+    } catch (error) {
+      console.warn("Failed to save theme preference:", error);
+    }
+  }
+}
+
+function toggleTheme() {
+  applyTheme(getTheme() === "dark" ? "light" : "dark", true);
 }
 
 function isActiveSubscription(subscription) {
@@ -1743,6 +1774,7 @@ const configManager = new ConfigManager();
 const groupManager = new GroupManager();
 
 CustomSelect.initAll();
+applyTheme(getTheme());
 subscriptionManager.init();
 configManager.init();
 groupManager.init();

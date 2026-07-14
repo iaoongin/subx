@@ -5,6 +5,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SubX 订阅工作台</title>
+  <script>
+    (() => {
+      try {
+        document.documentElement.dataset.theme = localStorage.getItem("subx-theme") || "dark";
+      } catch {
+        document.documentElement.dataset.theme = "dark";
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="index.css">
 </head>
 
@@ -22,6 +31,17 @@
           </button>
           <button type="button" class="hero-btn hero-btn-secondary" onclick="openConfigModal()">
             系统配置
+          </button>
+          <button
+            id="themeToggle"
+            type="button"
+            class="hero-btn theme-toggle"
+            onclick="toggleTheme()"
+            aria-label="切换至日间模式"
+            aria-pressed="true"
+            title="切换至日间模式"
+          >
+            <span class="theme-toggle-icon" aria-hidden="true"></span>
           </button>
           <button type="button" class="hero-btn hero-btn-ghost" onclick="logout()">
             退出登录

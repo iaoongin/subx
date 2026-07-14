@@ -1,4 +1,37 @@
 :root {
+    --bg: #11171d;
+    --panel: rgba(25, 33, 41, 0.9);
+    --panel-strong: #1b242d;
+    --panel-border: rgba(161, 181, 196, 0.18);
+    --text: #edf3f7;
+    --muted: #aab8c2;
+    --line: rgba(161, 181, 196, 0.16);
+    --brand: #e47749;
+    --brand-deep: #ffb38b;
+    --accent: #4bc4b0;
+    --accent-soft: rgba(75, 196, 176, 0.16);
+    --warning: #f0c45e;
+    --danger: #ef7667;
+    --success: #62c891;
+    --input-bg: rgba(20, 28, 35, 0.9);
+    --input-hover: rgba(31, 42, 51, 0.96);
+    --surface-soft: rgba(255, 255, 255, 0.05);
+    --surface-raised: rgba(29, 39, 48, 0.96);
+    --card-bg: linear-gradient(180deg, rgba(32, 42, 51, 0.98) 0%, rgba(24, 32, 40, 0.96) 100%);
+    --body-background: radial-gradient(circle at top left, rgba(228, 119, 73, 0.14), transparent 26%), radial-gradient(circle at top right, rgba(75, 196, 176, 0.12), transparent 24%), linear-gradient(180deg, #121a21 0%, #11171d 55%, #0c1217 100%);
+    --overlay: rgba(4, 8, 12, 0.72);
+    --shadow-lg: 0 28px 60px rgba(0, 0, 0, 0.34);
+    --shadow-md: 0 18px 30px rgba(0, 0, 0, 0.25);
+    --shadow-sm: 0 10px 20px rgba(0, 0, 0, 0.2);
+    --radius-xl: 16px;
+    --radius-lg: 14px;
+    --radius-md: 12px;
+    --radius-sm: 10px;
+    --font-sans: "Space Grotesk", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    --font-mono: "Cascadia Code", "JetBrains Mono", "SFMono-Regular", monospace;
+}
+
+html[data-theme="light"] {
     --bg: #f4efe6;
     --panel: rgba(255, 252, 246, 0.86);
     --panel-strong: #fffdf8;
@@ -13,15 +46,16 @@
     --warning: #f2b64c;
     --danger: #cc4b37;
     --success: #2f8f63;
+    --input-bg: rgba(255, 255, 255, 0.78);
+    --input-hover: rgba(255, 255, 255, 0.92);
+    --surface-soft: rgba(255, 255, 255, 0.58);
+    --surface-raised: rgba(255, 251, 244, 0.96);
+    --card-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 250, 243, 0.86) 100%);
+    --body-background: radial-gradient(circle at top left, rgba(255, 206, 124, 0.38), transparent 28%), radial-gradient(circle at top right, rgba(20, 122, 108, 0.22), transparent 22%), linear-gradient(180deg, #f8f2e9 0%, #f4efe6 46%, #f2ece1 100%);
+    --overlay: rgba(36, 22, 12, 0.46);
     --shadow-lg: 0 28px 60px rgba(62, 39, 16, 0.12);
     --shadow-md: 0 18px 30px rgba(62, 39, 16, 0.08);
     --shadow-sm: 0 10px 20px rgba(62, 39, 16, 0.06);
-    --radius-xl: 16px;
-    --radius-lg: 14px;
-    --radius-md: 12px;
-    --radius-sm: 10px;
-    --font-sans: "Space Grotesk", "Noto Sans SC", "Microsoft YaHei", sans-serif;
-    --font-mono: "Cascadia Code", "JetBrains Mono", "SFMono-Regular", monospace;
 }
 
 * {
@@ -34,10 +68,8 @@ body {
     min-height: 100vh;
     font-family: var(--font-sans);
     color: var(--text);
-    background:
-        radial-gradient(circle at top left, rgba(255, 206, 124, 0.38), transparent 28%),
-        radial-gradient(circle at top right, rgba(20, 122, 108, 0.22), transparent 22%),
-        linear-gradient(180deg, #f8f2e9 0%, #f4efe6 46%, #f2ece1 100%);
+    background: var(--body-background);
+    transition: background 0.22s ease, color 0.22s ease;
 }
 
 button,
@@ -58,7 +90,7 @@ select {
     width: 100%;
     border: 1px solid var(--panel-border);
     border-radius: 14px;
-    background: rgba(255, 255, 255, 0.78);
+    background: var(--input-bg);
     color: var(--text);
     padding: 10px 12px;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
@@ -233,6 +265,36 @@ textarea {
     box-shadow: none;
 }
 
+.theme-toggle {
+    display: inline-grid;
+    place-items: center;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.12);
+    box-shadow: none;
+}
+
+.theme-toggle:hover {
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: none;
+}
+
+.theme-toggle-icon {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: #f8d36e;
+    box-shadow: inset -5px -2px 0 #684222;
+}
+
+html[data-theme="light"] .theme-toggle-icon {
+    background: #fff6d5;
+    box-shadow: 0 0 0 3px rgba(255, 246, 213, 0.24);
+}
+
 .context-card,
 .subscriptions-section {
     border: 1px solid var(--panel-border);
@@ -321,7 +383,7 @@ textarea {
     padding: 0 46px 0 14px;
     border-radius: 14px;
     border: 1px solid var(--panel-border);
-    background: rgba(255, 255, 255, 0.82);
+    background: var(--input-bg);
     color: var(--text);
     text-align: left;
     box-shadow: 0 6px 14px rgba(62, 39, 16, 0.04);
@@ -329,7 +391,7 @@ textarea {
 
 .custom-select-trigger:hover {
     border-color: rgba(203, 92, 47, 0.32);
-    background: rgba(255, 255, 255, 0.92);
+    background: var(--input-hover);
 }
 
 .custom-select.is-open .custom-select-trigger,
@@ -374,7 +436,7 @@ textarea {
     padding: 8px;
     border-radius: 18px;
     border: 1px solid rgba(88, 61, 27, 0.14);
-    background: rgba(255, 251, 244, 0.98);
+    background: var(--surface-raised);
     box-shadow: 0 18px 30px rgba(62, 39, 16, 0.12);
     backdrop-filter: blur(18px);
     -webkit-backdrop-filter: blur(18px);
@@ -421,8 +483,8 @@ textarea {
     margin-top: 10px;
     padding: 10px;
     border-radius: 12px;
-    background: #f9f7f4;
-    border: 1px solid #eee;
+    background: var(--surface-soft);
+    border: 1px solid var(--line);
 }
 
 .group-summary-header {
@@ -440,7 +502,7 @@ textarea {
 
 .group-hint {
     font-size: 11px;
-    color: #999;
+    color: var(--muted);
     margin: 2px 0 0;
     line-height: 1.4;
 }
@@ -589,7 +651,7 @@ textarea {
     margin-bottom: 14px;
     padding: 10px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.58);
+    background: var(--surface-soft);
     border: 1px solid var(--line);
 }
 
@@ -598,15 +660,15 @@ textarea {
     min-width: 200px;
     padding: 8px 12px;
     border-radius: 10px;
-    border: 1px solid #e0e0e0;
-    background: white;
+    border: 1px solid var(--line);
+    background: var(--input-bg);
     font-size: 13px;
 }
 
 .toolbar-divider {
     width: 1px;
     height: 28px;
-    background: #e0e0e0;
+    background: var(--line);
 }
 
 .field-stack .custom-select,
@@ -659,9 +721,8 @@ textarea {
     gap: 10px;
     padding: 12px;
     border-radius: 14px;
-    border: 1px solid rgba(88, 61, 27, 0.1);
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 250, 243, 0.86) 100%);
+    border: 1px solid var(--panel-border);
+    background: var(--card-bg);
     box-shadow: var(--shadow-sm);
     transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
 }
@@ -674,8 +735,8 @@ textarea {
 
 .subscription-item.inactive {
     opacity: 0.62;
-    background: linear-gradient(180deg, rgba(237, 237, 237, 0.96) 0%, rgba(229, 229, 229, 0.92) 100%);
-    border-color: rgba(118, 118, 118, 0.22);
+    background: rgba(116, 128, 139, 0.15);
+    border-color: rgba(161, 181, 196, 0.18);
     box-shadow: none;
     filter: grayscale(100%);
 }
@@ -683,18 +744,18 @@ textarea {
 .subscription-item.inactive:hover {
     transform: none;
     box-shadow: none;
-    border-color: rgba(118, 118, 118, 0.22);
+    border-color: rgba(161, 181, 196, 0.18);
 }
 
 .subscription-item.inactive .subscription-url {
     background: rgba(120, 120, 120, 0.06);
     border-color: rgba(120, 120, 120, 0.18);
-    color: #5f6368;
+    color: var(--muted);
 }
 
 .subscription-item.inactive .subscription-description,
 .subscription-item.inactive .subscription-footnote {
-    color: #7a7f87;
+    color: var(--muted);
 }
 
 .subscription-item.inactive .subscription-actions {
@@ -751,11 +812,11 @@ textarea {
     display: block;
     padding: 10px;
     border-radius: 8px;
-    border: 1px solid #eee;
+    border: 1px solid var(--line);
     background: rgba(20, 122, 108, 0.05);
     font-family: var(--font-mono);
     font-size: 0.82rem;
-    color: #23544d;
+    color: var(--accent);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -778,11 +839,11 @@ textarea {
     background: transparent;
     border: none;
     font-size: 12px;
-    color: #999;
+    color: var(--muted);
 }
 
 .meta-separator {
-    color: #ddd;
+    color: var(--line);
 }
 
 
@@ -887,8 +948,8 @@ textarea {
     min-height: 180px;
     padding: 22px;
     border-radius: 20px;
-    border: 1px dashed rgba(88, 61, 27, 0.18);
-    background: rgba(255, 255, 255, 0.42);
+    border: 1px dashed var(--panel-border);
+    background: var(--surface-soft);
     color: var(--muted);
 }
 
@@ -914,7 +975,7 @@ textarea {
     align-items: center;
     justify-content: center;
     padding: 18px;
-    background: rgba(36, 22, 12, 0.46);
+    background: var(--overlay);
     z-index: 1000;
 }
 
@@ -929,8 +990,8 @@ textarea {
     display: flex;
     flex-direction: column;
     border-radius: 28px;
-    background: rgba(255, 251, 244, 0.96);
-    border: 1px solid rgba(88, 61, 27, 0.12);
+    background: var(--surface-raised);
+    border: 1px solid var(--panel-border);
     box-shadow: var(--shadow-lg);
     animation: modal-in 0.22s ease;
 }
@@ -1083,7 +1144,7 @@ textarea {
     gap: 14px;
     padding: 16px;
     border-radius: 18px;
-    background: rgba(255, 255, 255, 0.64);
+    background: var(--surface-soft);
     border: 1px solid var(--line);
 }
 
@@ -1135,8 +1196,8 @@ textarea {
     width: min(420px, calc(100vw - 32px));
     padding: 14px 16px;
     border-radius: 18px;
-    background: rgba(255, 251, 245, 0.96);
-    border: 1px solid rgba(88, 61, 27, 0.12);
+    background: var(--surface-raised);
+    border: 1px solid var(--panel-border);
     box-shadow: var(--shadow-md);
     transform: translateX(110%);
     opacity: 0;
@@ -1205,7 +1266,7 @@ textarea {
     display: none;
     place-items: center;
     gap: 12px;
-    background: rgba(255, 252, 247, 0.6);
+    background: var(--overlay);
     backdrop-filter: blur(4px);
     z-index: 1200;
 }
@@ -1236,7 +1297,7 @@ textarea {
 
 .sidebar-divider {
     height: 1px;
-    background: #eee;
+    background: var(--line);
     margin: 12px 0;
 }
 
@@ -1248,6 +1309,37 @@ textarea {
 
 .sidebar-inline-actions .section-action-btn {
     min-height: 36px;
+}
+
+html[data-theme="dark"] .custom-select-trigger::after {
+    border-color: var(--muted);
+}
+
+html[data-theme="dark"] .section-action-btn-muted,
+html[data-theme="dark"] .filter-chip,
+html[data-theme="dark"] .btn-neutral,
+html[data-theme="dark"] .btn-modal-secondary,
+html[data-theme="dark"] .attach-sub-type,
+html[data-theme="dark"] .toast-icon {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] .btn-warning {
+    color: var(--warning);
+}
+
+html[data-theme="dark"] .subscription-footnote.usage-error {
+    color: #ff9b8f;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+    }
 }
 
 @media (max-width: 1180px) {
