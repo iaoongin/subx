@@ -334,6 +334,47 @@ pnpm start
    }
    ```
 
+### GitHub Actions 发布与 Docker 部署
+
+不需要构建或推送应用镜像。服务器保留本仓库源码，Docker Compose 通过挂载源码目录启动服务；每次更新只运行 `update.sh`。
+
+首次在部署服务器执行：
+
+```bash
+git clone git@github.com:iaoongin/subx.git /opt/subx
+cd /opt/subx
+chmod +x update.sh
+./update.sh
+```
+
+仓库中的 `.github/workflows/deploy.yml` 会在推送到 `master` 分支或手动触发时，通过 SSH 在部署服务器执行 `./update.sh`。在 GitHub 仓库的 Actions Secrets 中配置：
+
+- `SSH_HOST`: 部署服务器地址
+- `SSH_PORT`: SSH 端口
+- `SSH_USER`: SSH 登录用户
+- `SSH_PRIVATE_KEY`: 该用户的私钥
+- `SSH_KNOWN_HOSTS`: 服务器的 SSH 主机指纹
+
+部署服务器上的 SSH 用户还必须拥有本仓库的只读访问权限，供 `update.sh` 执行 `git pull`。在受信任环境中获取并核对主机指纹后，可用以下命令生成 `SSH_KNOWN_HOSTS` 的值：
+
+```bash
+ssh-keyscan -H -p 22 your-server.example.com
+```
+
+发布示例：
+
+```bash
+git push origin master
+```
+
+手动更新同样只需在部署目录执行：
+
+```bash
+./update.sh
+```
+
+脚本会以 fast-forward 方式拉取源码，并用 `docker compose up -d --force-recreate` 重建服务容器，保留挂载目录中的 `data/` 和 `logs/`。
+
 ## 🔧 环境变量
 
 支持通过环境变量覆盖配置：
