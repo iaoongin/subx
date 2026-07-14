@@ -16,10 +16,10 @@
     --shadow-lg: 0 28px 60px rgba(62, 39, 16, 0.12);
     --shadow-md: 0 18px 30px rgba(62, 39, 16, 0.08);
     --shadow-sm: 0 10px 20px rgba(62, 39, 16, 0.06);
-    --radius-xl: 28px;
-    --radius-lg: 22px;
-    --radius-md: 16px;
-    --radius-sm: 12px;
+    --radius-xl: 16px;
+    --radius-lg: 14px;
+    --radius-md: 12px;
+    --radius-sm: 10px;
     --font-sans: "Space Grotesk", "Noto Sans SC", "Microsoft YaHei", sans-serif;
     --font-mono: "Cascadia Code", "JetBrains Mono", "SFMono-Regular", monospace;
 }
@@ -60,7 +60,7 @@ select {
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.78);
     color: var(--text);
-    padding: 12px 14px;
+    padding: 10px 12px;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
@@ -80,11 +80,10 @@ textarea {
 .app-shell {
     max-width: 1440px;
     margin: 0 auto;
-    padding: 32px 24px 48px;
+    padding: 24px 18px 36px;
 }
 
 .hero-panel,
-.stat-card,
 .context-card,
 .subscriptions-section,
 .modal-content,
@@ -96,56 +95,53 @@ textarea {
 .hero-panel {
     display: flex;
     justify-content: space-between;
-    gap: 28px;
-    padding: 34px;
-    margin-bottom: 24px;
+    align-items: stretch;
+    gap: 24px;
+    padding: 18px 20px;
+    margin-bottom: 18px;
     border-radius: var(--radius-xl);
-    background:
-        linear-gradient(135deg, rgba(49, 31, 16, 0.94) 0%, rgba(95, 47, 14, 0.9) 50%, rgba(203, 92, 47, 0.88) 100%);
+    background: linear-gradient(135deg, #2a1810 0%, #5f2f0e 50%, #cb5c2f 100%);
     color: #fff4ea;
     box-shadow: var(--shadow-lg);
     position: relative;
-    overflow: hidden;
-}
-
-.hero-panel::after {
-    content: "";
-    position: absolute;
-    inset: auto -12% -45% auto;
-    width: 320px;
-    height: 320px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(255, 236, 194, 0.4), transparent 65%);
 }
 
 .hero-copy {
     position: relative;
     z-index: 1;
-    max-width: 640px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .hero-copy h1 {
-    font-size: clamp(2.2rem, 4vw, 3.6rem);
-    line-height: 1;
-    margin-bottom: 12px;
+    font-size: 22px;
+    line-height: 1.2;
+    margin-bottom: 6px;
+    font-weight: 700;
 }
 
 .hero-copy p {
     max-width: 560px;
-    color: rgba(255, 244, 234, 0.86);
-    line-height: 1.7;
-    font-size: 1rem;
+    color: rgba(255, 244, 234, 0.6);
+    line-height: 1.4;
+    font-size: 13px;
 }
 
 .hero-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.hero-right {
     position: relative;
     z-index: 1;
     display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    align-content: flex-start;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-end;
     gap: 12px;
-    min-width: 280px;
+    flex-shrink: 0;
 }
 
 .hero-btn,
@@ -177,8 +173,40 @@ textarea {
 }
 
 .hero-btn {
-    padding: 12px 18px;
+    padding: 8px 14px;
     font-weight: 600;
+    border-radius: 12px;
+    font-size: 13px;
+}
+
+.hero-stats {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+}
+
+.hero-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+}
+
+.hero-stat-number {
+    font-weight: 700;
+    font-size: 16px;
+    color: #fff4ea;
+}
+
+.hero-stat-active {
+    color: #81c784;
+}
+
+.hero-stat-inactive {
+    color: #ef9a9a;
+}
+
+.hero-stat-label {
+    color: rgba(255, 244, 234, 0.5);
 }
 
 .hero-btn-secondary {
@@ -205,14 +233,6 @@ textarea {
     box-shadow: none;
 }
 
-.stats {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 18px;
-    margin-bottom: 24px;
-}
-
-.stat-card,
 .context-card,
 .subscriptions-section {
     border: 1px solid var(--panel-border);
@@ -220,49 +240,22 @@ textarea {
     box-shadow: var(--shadow-sm);
 }
 
-.stat-card {
-    padding: 22px;
-    border-radius: var(--radius-lg);
-}
-
-.stat-kicker {
-    display: inline-block;
-    margin-bottom: 12px;
-    color: var(--muted);
-    font-size: 12px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-.stat-number {
-    font-size: clamp(2rem, 2vw, 2.6rem);
-    font-weight: 700;
-    color: var(--brand-deep);
-    line-height: 1;
-    margin-bottom: 8px;
-}
-
-.stat-label {
-    color: var(--muted);
-    font-size: 0.95rem;
-}
-
 .workspace-layout {
     display: grid;
     grid-template-columns: 340px minmax(0, 1fr);
-    gap: 22px;
+    gap: 16px;
     align-items: start;
 }
 
 .workspace-sidebar {
     display: grid;
-    gap: 18px;
+    gap: 12px;
     position: sticky;
     top: 22px;
 }
 
 .context-card {
-    padding: 22px;
+    padding: 14px;
     border-radius: var(--radius-lg);
 }
 
@@ -270,12 +263,12 @@ textarea {
     display: flex;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 18px;
+    margin-bottom: 12px;
 }
 
 .panel-heading h2 {
-    font-size: 1.1rem;
-    margin-bottom: 6px;
+    font-size: 15px;
+    margin-bottom: 0;
 }
 
 .panel-heading p,
@@ -288,7 +281,7 @@ textarea {
 
 .field-stack {
     display: grid;
-    gap: 10px;
+    gap: 8px;
 }
 
 .field-label {
@@ -425,24 +418,31 @@ textarea {
 }
 
 .group-summary {
-    margin-top: 18px;
-    padding: 18px;
-    border-radius: 20px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.68) 0%, rgba(255, 248, 237, 0.96) 100%);
-    border: 1px solid rgba(203, 92, 47, 0.12);
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 12px;
+    background: #f9f7f4;
+    border: 1px solid #eee;
 }
 
 .group-summary-header {
     display: flex;
     justify-content: space-between;
     gap: 16px;
-    margin-bottom: 18px;
+    margin-bottom: 12px;
 }
 
 .group-summary-header strong {
     display: block;
-    font-size: 1.1rem;
-    margin-bottom: 6px;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.group-hint {
+    font-size: 11px;
+    color: #999;
+    margin: 2px 0 0;
+    line-height: 1.4;
 }
 
 .status-chip,
@@ -459,7 +459,7 @@ textarea {
 
 .status-chip {
     height: fit-content;
-    padding: 8px 12px;
+    padding: 6px 10px;
     background: rgba(122, 102, 87, 0.12);
     color: var(--muted);
     white-space: nowrap;
@@ -486,7 +486,7 @@ textarea {
     justify-content: space-between;
     gap: 12px;
     flex-wrap: wrap;
-    margin-top: 16px;
+    margin-top: 12px;
     color: var(--muted);
     font-size: 0.9rem;
 }
@@ -494,17 +494,23 @@ textarea {
 .sidebar-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 18px;
+    gap: 8px;
+    margin-top: 12px;
 }
 
 .sidebar-actions.stacked {
     grid-template-columns: 1fr;
 }
 
+.sidebar-actions-triple {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .section-action-btn {
-    min-height: 46px;
-    padding: 0 16px;
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 12px;
+    border-radius: 10px;
     font-weight: 600;
 }
 
@@ -543,7 +549,7 @@ textarea {
 }
 
 .subscriptions-section {
-    padding: 24px;
+    padding: 18px;
     border-radius: var(--radius-xl);
 }
 
@@ -552,19 +558,19 @@ textarea {
     justify-content: space-between;
     align-items: flex-start;
     gap: 16px;
-    margin-bottom: 20px;
+    margin-bottom: 14px;
 }
 
 .section-header h2 {
     font-size: 1.35rem;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 
 .results-pill {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 11px 16px;
+    padding: 9px 12px;
     border-radius: 999px;
     background: rgba(20, 122, 108, 0.08);
     color: var(--accent);
@@ -579,32 +585,28 @@ textarea {
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
-    gap: 14px;
-    margin-bottom: 22px;
-    padding: 16px;
-    border-radius: 20px;
+    gap: 8px;
+    margin-bottom: 14px;
+    padding: 10px;
+    border-radius: 12px;
     background: rgba(255, 255, 255, 0.58);
     border: 1px solid var(--line);
 }
 
-.search-field {
-    display: grid;
-    gap: 8px;
-    min-width: min(100%, 360px);
-    color: var(--muted);
-    font-size: 0.88rem;
-    font-weight: 600;
+.subscriptions-toolbar input[type="search"] {
+    flex: 1;
+    min-width: 200px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid #e0e0e0;
+    background: white;
+    font-size: 13px;
 }
 
-.toolbar-filters {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: end;
-}
-
-.toolbar-filters .custom-select {
-    flex: 0 0 190px;
+.toolbar-divider {
+    width: 1px;
+    height: 28px;
+    background: #e0e0e0;
 }
 
 .field-stack .custom-select,
@@ -615,16 +617,24 @@ textarea {
 .filter-chip-group {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 4px;
 }
 
 .filter-chip {
-    padding: 10px 14px;
-    border-radius: 999px;
+    padding: 6px 10px;
+    border-radius: 8px;
     border: 1px solid transparent;
     background: rgba(38, 25, 15, 0.06);
     color: var(--muted);
     font-weight: 600;
+    font-size: 12px;
+}
+
+.subscriptions-toolbar select {
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    width: auto;
 }
 
 .filter-chip:hover {
@@ -640,15 +650,15 @@ textarea {
 #subscriptionsList {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
+    gap: 10px;
 }
 
 .subscription-item {
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    padding: 18px;
-    border-radius: 22px;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 14px;
     border: 1px solid rgba(88, 61, 27, 0.1);
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 250, 243, 0.86) 100%);
@@ -682,17 +692,9 @@ textarea {
     color: #5f6368;
 }
 
-.subscription-item.inactive .subscription-url small,
 .subscription-item.inactive .subscription-description,
-.subscription-item.inactive .subscription-footnote,
-.subscription-item.inactive .meta-label,
-.subscription-item.inactive .meta-value {
+.subscription-item.inactive .subscription-footnote {
     color: #7a7f87;
-}
-
-.subscription-item.inactive .subscription-meta {
-    background: rgba(120, 120, 120, 0.05);
-    border-color: rgba(120, 120, 120, 0.14);
 }
 
 .subscription-item.inactive .subscription-actions {
@@ -702,16 +704,16 @@ textarea {
 .subscription-header {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     gap: 12px;
-    align-items: flex-start;
 }
 
 .subscription-title {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 0;
 }
 
 .subscription-name {
@@ -720,13 +722,13 @@ textarea {
 }
 
 .subscription-type {
-    padding: 6px 10px;
+    padding: 5px 8px;
     background: rgba(20, 122, 108, 0.1);
     color: var(--accent);
 }
 
 .subscription-status {
-    padding: 7px 12px;
+    padding: 5px 10px;
 }
 
 .status-active {
@@ -747,14 +749,16 @@ textarea {
 
 .subscription-url {
     display: block;
-    padding: 14px;
-    border-radius: 18px;
-    border: 1px dashed rgba(20, 122, 108, 0.2);
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #eee;
     background: rgba(20, 122, 108, 0.05);
     font-family: var(--font-mono);
     font-size: 0.82rem;
     color: #23544d;
-    word-break: break-all;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .subscription-url-text {
@@ -764,47 +768,28 @@ textarea {
     white-space: nowrap;
 }
 
-.subscription-url small {
-    display: block;
-    margin-top: 6px;
-    color: rgba(35, 84, 77, 0.76);
-}
-
 .subscription-meta {
-    display: grid;
-    gap: 12px;
-    padding: 16px;
-    border-radius: 18px;
-    background: rgba(38, 25, 15, 0.03);
-    border: 1px solid var(--line);
-}
-
-.subscription-meta-row {
     display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    align-items: center;
     flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    border: none;
+    font-size: 12px;
+    color: #999;
 }
 
-.meta-label {
-    color: var(--muted);
-    font-size: 0.82rem;
+.meta-separator {
+    color: #ddd;
 }
 
-.meta-value {
-    font-weight: 700;
-    color: var(--text);
-}
-
-.meta-value.pending {
-    color: var(--muted);
-}
 
 .usage-bar {
     display: flex;
     width: 100%;
-    height: 10px;
+    height: 6px;
     overflow: hidden;
     border-radius: 999px;
     background: rgba(38, 25, 15, 0.08);
@@ -826,7 +811,7 @@ textarea {
 .subscription-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
     margin-top: auto;
 }
 
@@ -834,14 +819,16 @@ textarea {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 38px;
-    padding: 0 14px;
+    min-height: 30px;
+    padding: 0 10px;
+    border-radius: 16px;
+    font-size: 12px;
     font-weight: 600;
 }
 
 .btn-sm {
-    min-height: 34px;
-    padding: 0 12px;
+    min-height: 30px;
+    padding: 0 10px;
     font-size: 0.84rem;
 }
 
@@ -893,9 +880,9 @@ textarea {
     display: grid;
     place-items: center;
     text-align: center;
-    min-height: 220px;
-    padding: 28px;
-    border-radius: 24px;
+    min-height: 180px;
+    padding: 22px;
+    border-radius: 20px;
     border: 1px dashed rgba(88, 61, 27, 0.18);
     background: rgba(255, 255, 255, 0.42);
     color: var(--muted);
@@ -922,7 +909,7 @@ textarea {
     display: none;
     align-items: center;
     justify-content: center;
-    padding: 24px;
+    padding: 18px;
     background: rgba(36, 22, 12, 0.46);
     z-index: 1000;
 }
@@ -933,7 +920,7 @@ textarea {
 
 .modal-content {
     width: min(100%, 640px);
-    max-height: calc(100vh - 48px);
+    max-height: calc(100vh - 36px);
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -973,7 +960,7 @@ textarea {
     justify-content: space-between;
     align-items: center;
     gap: 16px;
-    padding: 22px 24px;
+    padding: 18px 20px;
     color: white;
     background: linear-gradient(135deg, #341e10 0%, #7a3715 100%);
 }
@@ -998,14 +985,14 @@ textarea {
 }
 
 .modal-body {
-    padding: 24px;
+    padding: 20px;
     overflow-y: auto;
 }
 
 .modal-form,
 .form-grid {
     display: grid;
-    gap: 18px;
+    gap: 14px;
 }
 
 .form-grid {
@@ -1018,7 +1005,7 @@ textarea {
 
 .form-group {
     display: grid;
-    gap: 8px;
+    gap: 6px;
 }
 
 .form-group label {
@@ -1051,12 +1038,12 @@ textarea {
     display: flex;
     justify-content: flex-end;
     gap: 10px;
-    padding: 0 24px 24px;
+    padding: 0 20px 20px;
 }
 
 .btn-modal {
-    min-height: 44px;
-    padding: 0 18px;
+    min-height: 38px;
+    padding: 0 14px;
     font-weight: 600;
 }
 
@@ -1140,9 +1127,9 @@ textarea {
 .toast {
     display: flex;
     align-items: flex-start;
-    gap: 12px;
+    gap: 10px;
     width: min(420px, calc(100vw - 32px));
-    padding: 16px 18px;
+    padding: 14px 16px;
     border-radius: 18px;
     background: rgba(255, 251, 245, 0.96);
     border: 1px solid rgba(88, 61, 27, 0.12);
@@ -1243,6 +1230,22 @@ textarea {
     }
 }
 
+.sidebar-divider {
+    height: 1px;
+    background: #eee;
+    margin: 12px 0;
+}
+
+.sidebar-inline-actions h2 {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.sidebar-inline-actions .section-action-btn {
+    min-height: 36px;
+}
+
 @media (max-width: 1180px) {
     .workspace-layout {
         grid-template-columns: 1fr;
@@ -1255,7 +1258,6 @@ textarea {
 }
 
 @media (max-width: 980px) {
-    .stats,
     #subscriptionsList,
     .form-grid {
         grid-template-columns: 1fr;
@@ -1273,17 +1275,37 @@ textarea {
     }
 }
 
+@media (max-width: 768px) {
+    .hero-panel {
+        align-items: flex-start;
+    }
+
+    .hero-right {
+        width: 100%;
+        align-items: flex-start;
+    }
+
+    .hero-actions {
+        flex-wrap: wrap;
+    }
+
+    .hero-stats {
+        padding-top: 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.15);
+        width: 100%;
+    }
+}
+
 @media (max-width: 720px) {
     .app-shell {
-        padding: 18px 14px 32px;
+        padding: 14px 10px 24px;
     }
 
     .hero-panel,
     .subscriptions-section,
-    .context-card,
-    .stat-card {
-        padding: 18px;
-        border-radius: 22px;
+    .context-card {
+        padding: 14px;
+        border-radius: 18px;
     }
 
     .workspace-sidebar {
@@ -1315,14 +1337,14 @@ textarea {
 
     .modal-content {
         max-height: calc(100vh - 24px);
-        border-radius: 22px;
+        border-radius: 18px;
     }
 
     .modal-header,
     .modal-body,
     .modal-footer {
-        padding-left: 18px;
-        padding-right: 18px;
+        padding-left: 14px;
+        padding-right: 14px;
     }
 
     .modal-footer {

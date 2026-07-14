@@ -39,6 +39,7 @@
     "total": 99,
     "timestamp": 4102329600000,
     "adminPassword": "YOUR_ADMIN_PASSWORD_HERE",
+    "loginDisabled": false,
     "conversionMode": "native",
     "fallbackEnabled": false,
     "nativeConverterEnabled": true,

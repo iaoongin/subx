@@ -6,13 +6,18 @@ const router = express.Router();
  * 创建认证相关路由
  * @param {object} db - 数据库实例
  * @param {function} requireAuth - 认证中间件
+ * @param {function} isLoginDisabled - 检查是否禁用登录
  * @returns {Router} Express 路由器
  */
-function createAuthRoutes(db, requireAuth) {
+function createAuthRoutes(db, requireAuth, isLoginDisabled) {
     // 登录 API
     router.post("/api/auth/login", async (req, res) => {
         try {
             const { password } = req.body;
+
+            if (await isLoginDisabled()) {
+                return res.json({ message: "登录已禁用" });
+            }
 
             if (!password) {
                 return res.status(400).json({ error: "请输入密码" });
@@ -34,11 +39,11 @@ function createAuthRoutes(db, requireAuth) {
     });
 
     // 检查登录状态
-    router.get("/api/auth/status", (req, res) => {
-        if (req.session && req.session.authenticated) {
+    router.get("/api/auth/status", async (req, res) => {
+        if (await isLoginDisabled() || (req.session && req.session.authenticated)) {
             res.json({
                 authenticated: true,
-                loginTime: req.session.loginTime,
+                loginTime: req.session?.loginTime,
             });
         } else {
             res.status(401).json({ authenticated: false });
@@ -67,8 +72,8 @@ function createAuthRoutes(db, requireAuth) {
     });
 
     // 默认路由重定向到登录页面
-    router.get("/", (req, res) => {
-        if (req.session && req.session.authenticated) {
+    router.get("/", async (req, res) => {
+        if (await isLoginDisabled() || (req.session && req.session.authenticated)) {
             res.redirect("/admin");
         } else {
             res.redirect("/login");

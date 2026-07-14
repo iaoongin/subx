@@ -720,38 +720,29 @@ class SubscriptionManager {
       ? "流量读取中..."
       : `${formatBytes((userinfo.upload || 0) + (userinfo.download || 0))} / ${formatBytes(userinfo.total || 0)}`;
     const expireText = usagePending ? "--" : this.formatExpireDate(userinfo.expire);
-    const usageBar = usagePending
-      ? '<div class="usage-bar"></div>'
-      : this.formatUsageBar(userinfo.upload || 0, userinfo.download || 0, userinfo.total || 0);
-    const usageNote = usagePending
-      ? "正在读取实时流量。"
-      : subscription._usageMeta?.isStale
-        ? "当前显示的是缓存数据，后台会继续刷新。"
-        : "下载流量和上传流量按颜色拆分显示。";
     const urlPreview = isList
       ? `节点列表 · ${this.parseNodeUrls(subscription.url || "").length} 条`
       : this.getDomain(subscription.url);
-    const sourceLabel = isList
-      ? "点击复制节点内容"
-      : "点击复制完整链接";
 
     return `
       <article class="subscription-item ${subscription.active ? "" : "inactive"}">
+        <!-- 标题行：名称+类型（左）| 状态（右） -->
         <div class="subscription-header">
-          <div>
-            <div class="subscription-title">
-              <span class="subscription-name">${escapeHtml(subscription.name)}</span>
-              <span class="subscription-type">${typeLabel}</span>
-            </div>
-            ${subscription.description
-              ? `<p class="subscription-description">${escapeHtml(subscription.description)}</p>`
-              : ""}
+          <div class="subscription-title">
+            <span class="subscription-name">${escapeHtml(subscription.name)}</span>
+            <span class="subscription-type">${typeLabel}</span>
           </div>
           <span class="subscription-status ${subscription.active ? "status-active" : "status-inactive"}">
             ${statusLabel}
           </span>
         </div>
 
+        <!-- 备注（保留） -->
+        ${subscription.description
+          ? `<p class="subscription-description">${escapeHtml(subscription.description)}</p>`
+          : ""}
+
+        <!-- URL 单行显示 -->
         <button
           type="button"
           class="subscription-url"
@@ -759,26 +750,18 @@ class SubscriptionManager {
           onclick="subscriptionManager.copyToClipboard('${escapeJs(subscription.url)}')"
         >
           <span class="subscription-url-text">${escapeHtml(urlPreview)}</span>
-          <small>${escapeHtml(sourceLabel)}</small>
         </button>
 
         ${isList
-          ? `<div class="subscription-footnote">节点列表不会读取流量信息，但仍可以像普通订阅一样启停和解绑。</div>`
+          ? `<div class="subscription-footnote">节点列表不会读取流量信息</div>`
           : `
+            <!-- 元数据横向排列 -->
             <div class="subscription-meta">
-              <div class="subscription-meta-row">
-                <div>
-                  <div class="meta-label">已用流量</div>
-                  <div class="meta-value ${usagePending ? "pending" : ""}">${usageText}</div>
-                </div>
-                <div>
-                  <div class="meta-label">到期时间</div>
-                  <div class="meta-value ${usagePending ? "pending" : ""}">${expireText}</div>
-                </div>
-              </div>
-              <div>${usageBar}</div>
-              <div class="subscription-footnote">${usageNote}</div>
+              <span>更新: ${escapeHtml(expireText)}</span>
+              <span class="meta-separator">|</span>
+              <span>流量: ${escapeHtml(usageText)}</span>
             </div>
+            ${!isList && !usagePending ? this.formatUsageBar(userinfo.upload, userinfo.download, userinfo.total) : ''}
           `}
 
         <div class="subscription-actions">
@@ -850,30 +833,20 @@ class SubscriptionManager {
     if (normalizedTotal <= 0) {
       return '<div class="usage-bar"></div>';
     }
-
     const normalizedUpload = Number(upload) || 0;
     const normalizedDownload = Number(download) || 0;
     const used = Math.min(normalizedUpload + normalizedDownload, normalizedTotal);
-
     if (used <= 0) {
       return '<div class="usage-bar"></div>';
     }
-
     let downloadPercentage = Math.round((normalizedDownload / normalizedTotal) * 100);
     let uploadPercentage = Math.round((normalizedUpload / normalizedTotal) * 100);
-
     if (downloadPercentage + uploadPercentage > 100) {
       const scale = 100 / (downloadPercentage + uploadPercentage);
       downloadPercentage = Math.round(downloadPercentage * scale);
       uploadPercentage = 100 - downloadPercentage;
     }
-
-    return `
-      <div class="usage-bar">
-        <div class="usage-download" style="width:${downloadPercentage}%"></div>
-        <div class="usage-upload" style="width:${uploadPercentage}%"></div>
-      </div>
-    `;
+    return `<div class="usage-bar"><div class="usage-download" style="width:${downloadPercentage}%"></div><div class="usage-upload" style="width:${uploadPercentage}%"></div></div>`;
   }
 
   formatExpireDate(expire) {
@@ -1386,9 +1359,7 @@ class GroupManager {
 
     if (!this.currentGroup) {
       groupName.textContent = this.hasGroups() ? "未选择分组" : "还没有分组";
-      groupHint.textContent = this.hasGroups()
-        ? "请选择一个分组后再进行订阅管理。"
-        : "先创建一个分组，再开始整理订阅。";
+      groupHint.textContent = "";
       groupStatus.textContent = "未连接";
       groupStatus.classList.remove("is-active");
       groupLink.value = "";
@@ -1399,7 +1370,7 @@ class GroupManager {
     }
 
     groupName.textContent = this.currentGroup.name;
-    groupHint.textContent = "当前所有操作都会作用在这个分组上，新增订阅也会自动绑定到这里。";
+    groupHint.textContent = "操作将作用于此分组";
     groupStatus.textContent = "已连接";
     groupStatus.classList.add("is-active");
     groupLink.value = this.getCurrentGroupUrl();
