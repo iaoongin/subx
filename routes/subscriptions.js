@@ -9,6 +9,10 @@ function createEmptyUserinfo() {
     return { upload: 0, download: 0, total: 0, expire: 0 };
 }
 
+function isActiveSubscription(sub) {
+    return sub.active === 1 || sub.active === true || sub.active === "1";
+}
+
 function parseUserinfoHeader(infoStr) {
     const userinfo = createEmptyUserinfo();
     if (!infoStr) return userinfo;
@@ -145,11 +149,25 @@ function createSubscriptionRoutes(db) {
             const results = await Promise.all(
                 targetSubscriptions.map(async (sub) => {
                     const isList = sub.type === "node" || sub.type === "list";
+                    const isActive = isActiveSubscription(sub);
+
+                    if (!isActive) {
+                        return {
+                            id: sub.id,
+                            userinfo: createEmptyUserinfo(),
+                            skipped: true,
+                            skipReason: "inactive",
+                            updatedAt: 0,
+                            isStale: false,
+                        };
+                    }
+
                     if (isList) {
                         return {
                             id: sub.id,
                             userinfo: createEmptyUserinfo(),
                             skipped: true,
+                            skipReason: "node_list",
                             updatedAt: 0,
                             isStale: false,
                         };

@@ -808,6 +808,10 @@ textarea {
     font-size: 0.8rem;
 }
 
+.subscription-footnote.usage-error {
+    color: #b42318;
+}
+
 .subscription-actions {
     display: flex;
     flex-wrap: wrap;

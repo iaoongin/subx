@@ -46,6 +46,14 @@ function normalizeType(type) {
   return type || "subscription";
 }
 
+function isActiveSubscription(subscription) {
+  return (
+    subscription.active === 1 ||
+    subscription.active === true ||
+    subscription.active === "1"
+  );
+}
+
 function escapeHtml(text = "") {
   const div = document.createElement("div");
   div.textContent = String(text ?? "");
@@ -569,8 +577,18 @@ class SubscriptionManager {
       const data = await response.json();
       this.subscriptions = (data || []).map((subscription) => {
         const type = normalizeType(subscription.type);
+        const active = isActiveSubscription(subscription);
         if (type === "list") {
           return { ...subscription, type };
+        }
+
+        if (!active) {
+          return {
+            ...subscription,
+            type,
+            userinfo: {},
+            _usageMeta: { skipped: "inactive" },
+          };
         }
 
         if (subscription.userinfo && typeof subscription.userinfo === "object") {
@@ -608,7 +626,11 @@ class SubscriptionManager {
 
   async loadUsage({ refresh = false } = {}) {
     const ids = this.subscriptions
-      .filter((subscription) => normalizeType(subscription.type) !== "list")
+      .filter(
+        (subscription) =>
+          isActiveSubscription(subscription) &&
+          normalizeType(subscription.type) !== "list"
+      )
       .map((subscription) => subscription.id)
       .join(",");
 
@@ -649,6 +671,9 @@ class SubscriptionManager {
         _usageMeta: {
           isStale: Boolean(usage.isStale),
           updatedAt: usage.updatedAt || 0,
+          error: usage.error || null,
+          fromCache: Boolean(usage.fromCache),
+          skipped: usage.skipReason || null,
         },
       };
     });
@@ -712,27 +737,40 @@ class SubscriptionManager {
   renderSubscriptionCard(subscription) {
     const type = normalizeType(subscription.type);
     const isList = type === "list";
+    const isActive = isActiveSubscription(subscription);
     const typeLabel = isList ? "节点列表" : "订阅链接";
-    const statusLabel = subscription.active ? "启用中" : "已停用";
+    const statusLabel = isActive ? "启用中" : "已停用";
     const userinfo = subscription.userinfo || {};
+    const usageMeta = subscription._usageMeta || {};
     const usagePending = !isList && userinfo.pending === true;
+    const usageSkipped = !isActive || usageMeta.skipped === "inactive";
+    const usageFailed = Boolean(usageMeta.error);
     const usageText = usagePending
       ? "流量读取中..."
-      : `${formatBytes((userinfo.upload || 0) + (userinfo.download || 0))} / ${formatBytes(userinfo.total || 0)}`;
-    const expireText = usagePending ? "--" : this.formatExpireDate(userinfo.expire);
+      : usageFailed && !usageMeta.fromCache
+        ? "读取失败"
+        : `${formatBytes((userinfo.upload || 0) + (userinfo.download || 0))} / ${formatBytes(userinfo.total || 0)}`;
+    const expireText = usagePending || (usageFailed && !usageMeta.fromCache)
+      ? "--"
+      : this.formatExpireDate(userinfo.expire);
+    const usageNotice = usageSkipped
+      ? "订阅已停用，不读取流量信息"
+      : usageFailed
+        ? `流量读取失败${usageMeta.fromCache ? "，当前显示缓存数据" : "，请稍后重试"}`
+        : "";
     const urlPreview = isList
       ? `节点列表 · ${this.parseNodeUrls(subscription.url || "").length} 条`
       : this.getDomain(subscription.url);
 
     return `
-      <article class="subscription-item ${subscription.active ? "" : "inactive"}">
+      <article class="subscription-item ${isActive ? "" : "inactive"}">
         <!-- 标题行：名称+类型（左）| 状态（右） -->
         <div class="subscription-header">
           <div class="subscription-title">
             <span class="subscription-name">${escapeHtml(subscription.name)}</span>
             <span class="subscription-type">${typeLabel}</span>
           </div>
-          <span class="subscription-status ${subscription.active ? "status-active" : "status-inactive"}">
+          <span class="subscription-status ${isActive ? "status-active" : "status-inactive"}">
             ${statusLabel}
           </span>
         </div>
@@ -761,7 +799,8 @@ class SubscriptionManager {
               <span class="meta-separator">|</span>
               <span>流量: ${escapeHtml(usageText)}</span>
             </div>
-            ${!isList && !usagePending ? this.formatUsageBar(userinfo.upload, userinfo.download, userinfo.total) : ''}
+            ${usageNotice ? `<div class="subscription-footnote ${usageFailed ? "usage-error" : ""}">${escapeHtml(usageNotice)}</div>` : ""}
+            ${!usagePending && !usageSkipped && (!usageFailed || usageMeta.fromCache) ? this.formatUsageBar(userinfo.upload, userinfo.download, userinfo.total) : ""}
           `}
 
         <div class="subscription-actions">
@@ -777,10 +816,10 @@ class SubscriptionManager {
           </button>
           <button
             type="button"
-            class="btn ${subscription.active ? "btn-warning" : "btn-success"} btn-sm"
+            class="btn ${isActive ? "btn-warning" : "btn-success"} btn-sm"
             onclick="subscriptionManager.toggleSubscription('${escapeJs(subscription.id)}')"
           >
-            ${subscription.active ? "停用" : "启用"}
+            ${isActive ? "停用" : "启用"}
           </button>
           <button
             type="button"
