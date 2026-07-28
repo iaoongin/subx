@@ -12,7 +12,7 @@ class NativeConverter {
     this.merger = new NodeMerger();
   }
 
-  async convert(subscriptionUrls, targetFormat) {
+  async convert(subscriptionUrls, targetFormat, subscriptionSources = []) {
     let currentStep = "init";
     try {
       console.log("========== Native conversion start ==========");
@@ -21,7 +21,13 @@ class NativeConverter {
       currentStep = "fetch-subscriptions";
       console.log("[step 1] fetching subscriptions...");
       const fetchResults = await Promise.all(
-        subscriptionUrls.map((url) => this.fetcher.fetch(url)),
+        subscriptionUrls.map(async (url, index) => {
+          const result = await this.fetcher.fetch(url);
+          return {
+            ...result,
+            sourceName: subscriptionSources[index]?.name || "",
+          };
+        }),
       );
 
       let totalNodes = 0;

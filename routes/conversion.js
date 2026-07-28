@@ -10,6 +10,10 @@ const {
 const { applyExtensionScriptToContent, getExtensionScript, normalizeScript } = require("../services/extension-script");
 const { base64Encode } = require("../utils/encoding");
 const cache = require("../services/cache");
+const {
+    getCurrentSubscriptionUsage,
+    isSubscriptionExhausted,
+} = require("../services/subscription-usage");
 
 /**
  * 创建订阅转换路由
@@ -63,6 +67,7 @@ function createConversionRoutes(db) {
         // 从数据库获取该分组下活跃的订阅和全局配置
         let activeUrls;
         let activeSubscriptions;
+        let activeSources = [];
         let config;
 
         try {
@@ -73,7 +78,11 @@ function createConversionRoutes(db) {
                 console.log("数据库中没有活跃订阅，使用默认数据");
                 activeUrls = await ADD(MainData);
             } else {
-                activeUrls = expandSubscriptionUrls(activeSubscriptions);
+                if (config.filterExhaustedSubscriptions !== false) {
+                    activeSubscriptions = await filterExhaustedSubscriptions(activeSubscriptions);
+                }
+                activeSources = expandSubscriptionSources(activeSubscriptions);
+                activeUrls = activeSources.map((source) => source.url);
                 console.log("从数据库获取到", activeSubscriptions.length, "个活跃订阅，展开为", activeUrls.length, "条链接");
             }
         } catch (dbError) {
@@ -104,7 +113,7 @@ function createConversionRoutes(db) {
                 console.log('使用原生转换器');
                 const NativeConverter = require('../services/native');
                 const converter = new NativeConverter();
-                subContent = await converter.convert(activeUrls, format);
+                subContent = await converter.convert(activeUrls, format, activeSources);
             } catch (error) {
                 console.error('原生转换失败:', error);
 
@@ -169,20 +178,45 @@ function createConversionRoutes(db) {
     }
 
     function expandSubscriptionUrls(subscriptions) {
-        const urls = [];
+        return expandSubscriptionSources(subscriptions).map((source) => source.url);
+    }
+
+    async function filterExhaustedSubscriptions(subscriptions) {
+        const availability = await Promise.all(
+            subscriptions.map(async (sub) => {
+                if (sub.type === "list" || sub.type === "node") return { sub, exhausted: false };
+
+                try {
+                    const userinfo = await getCurrentSubscriptionUsage(sub);
+                    return { sub, exhausted: isSubscriptionExhausted(userinfo) };
+                } catch (error) {
+                    console.warn(`Unable to check usage for subscription id=${sub.id}; keeping it`, error.message);
+                    return { sub, exhausted: false };
+                }
+            }),
+        );
+
+        const exhausted = availability.filter((item) => item.exhausted).map((item) => item.sub);
+        if (exhausted.length > 0) {
+            console.log(`Filtered ${exhausted.length} exhausted subscription(s): ${exhausted.map((sub) => sub.name || sub.id).join(", ")}`);
+        }
+        return availability.filter((item) => !item.exhausted).map((item) => item.sub);
+    }
+
+    function expandSubscriptionSources(subscriptions) {
+        const sources = [];
         for (const sub of subscriptions) {
             if (!sub || !sub.url) continue;
-            if (sub.type === "list" || sub.type === "node") {
-                const parts = sub.url
-                    .split(/[\r\n,;]+/)
-                    .map((s) => s.trim())
-                    .filter((s) => s.length > 0);
-                urls.push(...parts);
-            } else {
-                urls.push(sub.url);
+            const urls = sub.type === "list" || sub.type === "node"
+                ? sub.url.split(/[\r\n,;]+/)
+                : [sub.url];
+
+            for (const url of urls) {
+                const trimmedUrl = url.trim();
+                if (trimmedUrl) sources.push({ url: trimmedUrl, name: sub.name || "Unnamed Subscription" });
             }
         }
-        return urls;
+        return sources;
     }
 
     router.get("/:path", async (req, res) => {

@@ -2,6 +2,8 @@
  * 节点合并器
  * 负责合并多个订阅源的节点，去重和排序
  */
+const crypto = require("crypto");
+
 class NodeMerger {
     /**
      * 合并节点列表
@@ -16,21 +18,24 @@ class NodeMerger {
         for (const result of fetchResults) {
             const nodes = result.nodes || [];
             for (const node of nodes) {
-                const key = this.generateNodeKey(node);
+                const sourcedNode = this.withSourceName(node, result.sourceName);
+                const key = this.generateNodeKey(sourcedNode);
                 if (!seen.has(key)) {
                     seen.add(key);
-                    allNodes.push(node);
+                    allNodes.push(sourcedNode);
                     dedupGroups.set(key, {
                         key,
-                        kept: node,
+                        kept: sourcedNode,
                         duplicates: [],
                     });
                     continue;
                 }
 
-                dedupGroups.get(key).duplicates.push(node);
+                dedupGroups.get(key).duplicates.push(sourcedNode);
             }
         }
+
+        this.ensureUniqueNames(allNodes);
 
         // 排序：按类型分组，同类型按名称排序
         allNodes.sort((a, b) => {
@@ -54,7 +59,51 @@ class NodeMerger {
      * @returns {string} 唯一标识
      */
     generateNodeKey(node) {
-        return `${node.type}:${node.server}:${node.port}`;
+        const endpointKey = `${node.type}:${node.server}:${node.port}`;
+        const identity = this.getNodeIdentity(node);
+
+        if (!identity) return endpointKey;
+
+        const identityHash = crypto
+            .createHash("sha256")
+            .update(identity)
+            .digest("hex")
+            .slice(0, 16);
+        return `${endpointKey}:auth=${identityHash}`;
+    }
+
+    getNodeIdentity(node) {
+        switch (node.type) {
+            case "vmess":
+            case "vless":
+                return node.uuid ? `uuid:${node.uuid}` : "";
+            case "trojan":
+            case "hysteria2":
+                return node.password ? `password:${node.password}` : "";
+            case "ss":
+                return node.method && node.password
+                    ? `method:${node.method}:password:${node.password}`
+                    : "";
+            default:
+                return "";
+        }
+    }
+
+    withSourceName(node, sourceName) {
+        if (!sourceName) return { ...node };
+
+        const originalName = node.name || "Unnamed Node";
+        return { ...node, name: `${originalName} (${sourceName})` };
+    }
+
+    ensureUniqueNames(nodes) {
+        const counts = new Map();
+        for (const node of nodes) {
+            const name = node.name || "Unnamed Node";
+            const count = (counts.get(name) || 0) + 1;
+            counts.set(name, count);
+            node.name = count === 1 ? name : `${name} (${count})`;
+        }
     }
 
     /**

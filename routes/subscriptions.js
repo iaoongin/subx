@@ -1,99 +1,14 @@
 const express = require("express");
 const router = express.Router();
-
-const USAGE_TTL_MS = 3 * 60 * 1000;
-const USAGE_TIMEOUT_MS = 8000;
-const usageCache = new Map();
-
-function createEmptyUserinfo() {
-    return { upload: 0, download: 0, total: 0, expire: 0 };
-}
-
-function isActiveSubscription(sub) {
-    return sub.active === 1 || sub.active === true || sub.active === "1";
-}
-
-function parseUserinfoHeader(infoStr) {
-    const userinfo = createEmptyUserinfo();
-    if (!infoStr) return userinfo;
-
-    infoStr.split(";").forEach((pair) => {
-        const [key, value] = pair.split("=").map((s) => s.trim());
-        if (["upload", "download", "total", "expire"].includes(key)) {
-            userinfo[key] = Number(value) || 0;
-        }
-    });
-
-    return userinfo;
-}
-
-function getCachedUsage(sub) {
-    const key = String(sub.id);
-    const cached = usageCache.get(key);
-    if (!cached) return null;
-    if (cached.url !== sub.url) return null;
-    return cached;
-}
-
-function setCachedUsage(sub, userinfo) {
-    const now = Date.now();
-    const key = String(sub.id);
-    usageCache.set(key, {
-        url: sub.url,
-        userinfo,
-        updatedAt: now,
-        expiresAt: now + USAGE_TTL_MS,
-        refreshing: false,
-    });
-}
-
-function markRefreshing(sub, refreshing) {
-    const key = String(sub.id);
-    const cached = usageCache.get(key);
-    if (!cached) return;
-    cached.refreshing = refreshing;
-    usageCache.set(key, cached);
-}
-
-async function fetchSubscriptionUsage(sub) {
-    if (!sub.url) return createEmptyUserinfo();
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), USAGE_TIMEOUT_MS);
-
-    try {
-        const resp = await fetch(sub.url, {
-            headers: { "User-Agent": "Clash Verge" },
-            signal: controller.signal,
-        });
-
-        if (!resp.ok) {
-            throw new Error(`status ${resp.status}`);
-        }
-
-        const infoStr = resp.headers.get("subscription-userinfo");
-        return parseUserinfoHeader(infoStr);
-    } finally {
-        clearTimeout(timeout);
-    }
-}
-
-function refreshUsageInBackground(sub) {
-    const cached = getCachedUsage(sub);
-    if (!cached || cached.refreshing) return;
-
-    markRefreshing(sub, true);
-    fetchSubscriptionUsage(sub)
-        .then((userinfo) => {
-            setCachedUsage(sub, userinfo);
-        })
-        .catch((error) => {
-            console.error("Background usage refresh failed", sub.url, error);
-        })
-        .finally(() => {
-            markRefreshing(sub, false);
-        });
-}
+const {
+    createEmptyUserinfo,
+    isActiveSubscription,
+    getCachedUsage,
+    setCachedUsage,
+    fetchSubscriptionUsage,
+    refreshUsageInBackground,
+} = require("../services/subscription-usage");
+const { getSubscriptionNodeCount } = require("../services/subscription-node-count");
 
 /**
  * 创建订阅管理相关路由
@@ -235,6 +150,41 @@ function createSubscriptionRoutes(db) {
         } catch (error) {
             console.error("Failed to fetch usage info:", error);
             res.status(500).json({ error: "Failed to fetch usage info" });
+        }
+    });
+
+    router.get("/api/subscriptions/node-counts", async (req, res) => {
+        try {
+            const idParam = typeof req.query.ids === "string" ? req.query.ids : "";
+            const idSet = new Set(
+                idParam
+                    .split(",")
+                    .map((id) => Number(id.trim()))
+                    .filter((id) => Number.isFinite(id))
+            );
+            const groupId = req.query.groupId;
+            const subscriptions = groupId
+                ? await db.getSubscriptionsByGroup(groupId)
+                : await db.getAllSubscriptions();
+            const targets = subscriptions.filter(
+                (sub) => idSet.has(Number(sub.id)) && isActiveSubscription(sub) && sub.type !== "list" && sub.type !== "node"
+            );
+
+            const results = await Promise.all(
+                targets.map(async (sub) => {
+                    try {
+                        return { id: sub.id, count: await getSubscriptionNodeCount(sub) };
+                    } catch (error) {
+                        console.error("Failed to count subscription nodes", sub.url, error);
+                        return { id: sub.id, count: null, error: "fetch_failed" };
+                    }
+                })
+            );
+
+            res.json({ data: results });
+        } catch (error) {
+            console.error("Failed to count subscription nodes:", error);
+            res.status(500).json({ error: "Failed to count subscription nodes" });
         }
     });
 

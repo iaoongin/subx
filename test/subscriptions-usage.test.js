@@ -4,6 +4,41 @@ const test = require("node:test");
 const express = require("express");
 
 const createSubscriptionRoutes = require("../routes/subscriptions");
+const {
+  getCurrentSubscriptionUsage,
+  isSubscriptionExhausted,
+} = require("../services/subscription-usage");
+const { getSubscriptionNodeCount } = require("../services/subscription-node-count");
+
+test("node count parses a direct node subscription", async () => {
+  const count = await getSubscriptionNodeCount({
+    id: "direct-node-count",
+    url: "trojan://password@example.com:443#Test",
+  });
+
+  assert.equal(count, 1);
+});
+
+test("usage exhaustion requires a declared total and includes upload plus download", async (t) => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => new Response("", {
+    status: 200,
+    headers: {
+      "subscription-userinfo": "upload=40; download=60; total=100",
+    },
+  });
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+
+  const userinfo = await getCurrentSubscriptionUsage({
+    id: "exhaustion-test",
+    url: "https://usage.example/sub",
+  });
+
+  assert.equal(isSubscriptionExhausted(userinfo), true);
+  assert.equal(isSubscriptionExhausted({ upload: 100, download: 0, total: 0 }), false);
+});
 
 test("usage refresh skips disabled subscriptions", async (t) => {
   const originalFetch = global.fetch;

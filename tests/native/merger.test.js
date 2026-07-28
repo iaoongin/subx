@@ -69,6 +69,50 @@ test("merge returns kept nodes and duplicate groups", () => {
   );
 });
 
+test("merge keeps same endpoint nodes with different credentials and labels their sources", () => {
+  const merger = new NodeMerger();
+  const result = merger.merge([
+    {
+      sourceName: "Expired Plan",
+      nodes: [{
+        type: "trojan",
+        name: "Hong Kong 01",
+        server: "same.example.com",
+        port: 443,
+        password: "expired-password",
+      }],
+    },
+    {
+      sourceName: "Available Plan",
+      nodes: [
+        {
+          type: "trojan",
+          name: "Hong Kong 01",
+          server: "same.example.com",
+          port: 443,
+          password: "available-password",
+        },
+        {
+          type: "trojan",
+          name: "Hong Kong 01",
+          server: "same.example.com",
+          port: 443,
+          password: "available-password",
+        },
+      ],
+    },
+  ]);
+
+  assert.equal(result.nodes.length, 2);
+  assert.deepEqual(
+    result.nodes.map((node) => node.name).sort(),
+    ["Hong Kong 01 (Available Plan)", "Hong Kong 01 (Expired Plan)"],
+  );
+  assert.equal(result.dedupReport.length, 1);
+  assert.match(result.dedupReport[0].key, /^trojan:same\.example\.com:443:auth=[a-f0-9]{16}$/);
+  assert.ok(!result.dedupReport[0].key.includes("available-password"));
+});
+
 test("formatNodeRecord keeps raw URI exactly as-is", () => {
   const converter = new NativeConverter();
   const raw = "trojan://password123@pokemon-02.yunjnet.com:54029?allowInsecure=1&peer=www.apple.com.cn&sni=www.apple.com.cn&type=tcp#日本01";

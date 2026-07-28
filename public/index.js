@@ -610,7 +610,7 @@ class SubscriptionManager {
         const type = normalizeType(subscription.type);
         const active = isActiveSubscription(subscription);
         if (type === "list") {
-          return { ...subscription, type };
+          return { ...subscription, type, nodeCount: this.parseNodeUrls(subscription.url || "").length };
         }
 
         if (!active) {
@@ -638,6 +638,9 @@ class SubscriptionManager {
 
       this.loadUsage().catch((error) => {
         console.error("Failed to load usage:", error);
+      });
+      this.loadNodeCounts().catch((error) => {
+        console.error("Failed to load node counts:", error);
       });
     } catch (error) {
       console.error("Failed to load subscriptions:", error);
@@ -712,6 +715,35 @@ class SubscriptionManager {
     this.render();
   }
 
+  async loadNodeCounts() {
+    const ids = this.subscriptions
+      .filter(
+        (subscription) =>
+          isActiveSubscription(subscription) &&
+          normalizeType(subscription.type) !== "list"
+      )
+      .map((subscription) => subscription.id)
+      .join(",");
+
+    if (!ids) return;
+
+    const params = new URLSearchParams({ ids, groupId: this.currentGroupId });
+    const response = await fetch(`/api/subscriptions/node-counts?${params.toString()}`, {
+      skipLoading: true,
+    });
+    if (!response.ok) throw new Error("获取节点数量失败");
+
+    const result = await response.json();
+    const counts = new Map((result.data || []).map((item) => [String(item.id), item]));
+    this.subscriptions = this.subscriptions.map((subscription) => {
+      const nodeCount = counts.get(String(subscription.id));
+      return nodeCount
+        ? { ...subscription, nodeCount: nodeCount.count, _nodeCountError: nodeCount.error || null }
+        : subscription;
+    });
+    this.render();
+  }
+
   async refreshUsage() {
     if (!this.currentGroupId) {
       this.showMessage("请先选择一个分组。", "error");
@@ -776,6 +808,22 @@ class SubscriptionManager {
     const usagePending = !isList && userinfo.pending === true;
     const usageSkipped = !isActive || usageMeta.skipped === "inactive";
     const usageFailed = Boolean(usageMeta.error);
+    const nodeCountText = isList
+      ? String(subscription.nodeCount ?? 0)
+      : !isActive
+        ? "未读取"
+      : subscription.nodeCount === undefined
+        ? "读取中..."
+        : subscription._nodeCountError
+          ? "--"
+          : String(subscription.nodeCount);
+    const isExhausted =
+      !isList &&
+      isActive &&
+      !usagePending &&
+      !usageFailed &&
+      this.isUsageExhausted(userinfo);
+    const isFiltered = isExhausted && this.isExhaustedFilteringEnabled();
     const usageText = usagePending
       ? "流量读取中..."
       : usageFailed && !usageMeta.fromCache
@@ -801,8 +849,8 @@ class SubscriptionManager {
             <span class="subscription-name">${escapeHtml(subscription.name)}</span>
             <span class="subscription-type">${typeLabel}</span>
           </div>
-          <span class="subscription-status ${isActive ? "status-active" : "status-inactive"}">
-            ${statusLabel}
+          <span class="subscription-status ${isFiltered ? "status-exhausted" : isActive ? "status-active" : "status-inactive"}">
+            ${isFiltered ? "已用尽" : statusLabel}
           </span>
         </div>
 
@@ -822,13 +870,15 @@ class SubscriptionManager {
         </button>
 
         ${isList
-          ? `<div class="subscription-footnote">节点列表不会读取流量信息</div>`
+          ? `<div class="subscription-footnote">节点数：${escapeHtml(nodeCountText)} · 节点列表不会读取流量信息</div>`
           : `
             <!-- 元数据横向排列 -->
             <div class="subscription-meta">
               <span>更新: ${escapeHtml(expireText)}</span>
               <span class="meta-separator">|</span>
               <span>流量: ${escapeHtml(usageText)}</span>
+              <span class="meta-separator">|</span>
+              <span>节点: ${escapeHtml(nodeCountText)}</span>
             </div>
             ${usageNotice ? `<div class="subscription-footnote ${usageFailed ? "usage-error" : ""}">${escapeHtml(usageNotice)}</div>` : ""}
             ${!usagePending && !usageSkipped && (!usageFailed || usageMeta.fromCache) ? this.formatUsageBar(userinfo.upload, userinfo.download, userinfo.total) : ""}
@@ -917,6 +967,17 @@ class SubscriptionManager {
       uploadPercentage = 100 - downloadPercentage;
     }
     return `<div class="usage-bar"><div class="usage-download" style="width:${downloadPercentage}%"></div><div class="usage-upload" style="width:${uploadPercentage}%"></div></div>`;
+  }
+
+  isUsageExhausted(userinfo) {
+    const total = Number(userinfo?.total) || 0;
+    const used = (Number(userinfo?.upload) || 0) + (Number(userinfo?.download) || 0);
+    return total > 0 && used >= total;
+  }
+
+  isExhaustedFilteringEnabled() {
+    return typeof configManager === "undefined" ||
+      configManager.currentConfig?.filterExhaustedSubscriptions !== false;
   }
 
   formatExpireDate(expire) {
@@ -1233,6 +1294,9 @@ class ConfigManager {
     CustomSelect.syncById("modal-defaultPreviewFormat");
     document.getElementById("modal-subUpdateTime").value = config.subUpdateTime || 6;
     document.getElementById("modal-total").value = config.total ?? 0;
+    document.getElementById("modal-filterExhaustedSubscriptions").value =
+      config.filterExhaustedSubscriptions !== false ? "true" : "false";
+    CustomSelect.syncById("modal-filterExhaustedSubscriptions");
     document.getElementById("modal-botToken").value = config.botToken || "";
     document.getElementById("modal-chatId").value = config.chatId || "";
     document.getElementById("modal-adminPassword").value = config.adminPassword || "";
@@ -1242,6 +1306,9 @@ class ConfigManager {
       ...config,
       defaultPreviewFormat: config.defaultPreviewFormat || "ss",
     };
+    if (typeof subscriptionManager !== "undefined") {
+      subscriptionManager.render();
+    }
   }
 
   async saveConfig() {
@@ -1256,6 +1323,8 @@ class ConfigManager {
         document.getElementById("modal-total").value === ""
           ? 0
           : parseInt(document.getElementById("modal-total").value, 10) || 0,
+      filterExhaustedSubscriptions:
+        document.getElementById("modal-filterExhaustedSubscriptions").value === "true",
       botToken: document.getElementById("modal-botToken").value.trim(),
       chatId: document.getElementById("modal-chatId").value.trim(),
       adminPassword: document.getElementById("modal-adminPassword").value.trim(),
@@ -1293,6 +1362,7 @@ class ConfigManager {
       }
 
       this.currentConfig = configResult.config || config;
+      subscriptionManager.render();
       closeModal("configModal");
       this.showMessage("系统配置已保存。", "success");
     } catch (error) {

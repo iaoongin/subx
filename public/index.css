@@ -802,6 +802,11 @@ html[data-theme="light"] .theme-toggle-icon {
     color: var(--danger);
 }
 
+.status-exhausted {
+    background: rgba(204, 75, 55, 0.16);
+    color: var(--danger);
+}
+
 .subscription-description {
     color: var(--muted);
     line-height: 1.6;
