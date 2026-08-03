@@ -1,16 +1,30 @@
 @echo off
-chcp 65001 >nul
-REM 订阅转换服务启动脚本
-REM 用法: start.bat [--daemon]
+setlocal EnableExtensions EnableDelayedExpansion
+REM Subscription conversion service launcher.
+REM Usage: start.bat [--daemon]
+
+set "NODE_EXE=node"
+where node >nul 2>&1
+if errorlevel 1 (
+    set "CODEX_NODE=%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe"
+    if exist "!CODEX_NODE!" (
+        set "NODE_EXE=!CODEX_NODE!"
+        echo Node was not found in PATH. Using the Codex bundled Node.
+    ) else (
+        echo Error: node.exe was not found in PATH or the Codex runtime.
+        echo Install Node.js or add its directory to PATH.
+        exit /b 1
+    )
+)
 
 if "%1"=="--daemon" (
-    echo 正在后台启动服务器...
-    start /B node index.js > logs\server.log 2>&1
-    echo 服务器已在后台启动
-    echo 查看日志: tail -f logs\server.log
-    echo 停止服务: stop.bat
+    echo Starting server in the background...
+    start /B "" "%NODE_EXE%" index.js > logs\server.log 2>&1
+    echo Server started in the background.
+    echo Logs: logs\server.log
+    echo Stop: stop.bat
 ) else (
-    echo 正在前台启动服务器...
-    echo 按 Ctrl+C 停止服务器
-    node index.js
+    echo Starting server in the foreground...
+    echo Press Ctrl+C to stop.
+    "%NODE_EXE%" index.js
 )

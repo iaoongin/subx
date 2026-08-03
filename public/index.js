@@ -638,9 +638,11 @@ class SubscriptionManager {
 
       this.loadUsage().catch((error) => {
         console.error("Failed to load usage:", error);
+        this.markUsageLoadFailed(error);
       });
       this.loadNodeCounts().catch((error) => {
         console.error("Failed to load node counts:", error);
+        this.markNodeCountLoadFailed(error);
       });
     } catch (error) {
       console.error("Failed to load subscriptions:", error);
@@ -696,6 +698,21 @@ class SubscriptionManager {
     this.subscriptions = this.subscriptions.map((subscription) => {
       const usage = usageMap.get(String(subscription.id));
       if (!usage) {
+        if (
+          isActiveSubscription(subscription) &&
+          normalizeType(subscription.type) !== "list" &&
+          subscription.userinfo?.pending === true
+        ) {
+          return {
+            ...subscription,
+            userinfo: {},
+            _usageMeta: {
+              error: "missing_result",
+              errorReason: "未收到流量信息结果",
+              fromCache: false,
+            },
+          };
+        }
         return subscription;
       }
 
@@ -706,12 +723,32 @@ class SubscriptionManager {
           isStale: Boolean(usage.isStale),
           updatedAt: usage.updatedAt || 0,
           error: usage.error || null,
+          errorReason: usage.errorReason || null,
           fromCache: Boolean(usage.fromCache),
           skipped: usage.skipReason || null,
         },
       };
     });
 
+    this.render();
+  }
+
+  markUsageLoadFailed(error) {
+    const reason = error?.message || "获取流量信息失败";
+    this.subscriptions = this.subscriptions.map((subscription) => {
+      if (
+        isActiveSubscription(subscription) &&
+        normalizeType(subscription.type) !== "list" &&
+        subscription.userinfo?.pending === true
+      ) {
+        return {
+          ...subscription,
+          userinfo: {},
+          _usageMeta: { error: "fetch_failed", errorReason: reason, fromCache: false },
+        };
+      }
+      return subscription;
+    });
     this.render();
   }
 
@@ -737,9 +774,42 @@ class SubscriptionManager {
     const counts = new Map((result.data || []).map((item) => [String(item.id), item]));
     this.subscriptions = this.subscriptions.map((subscription) => {
       const nodeCount = counts.get(String(subscription.id));
+      if (!isActiveSubscription(subscription) || normalizeType(subscription.type) === "list") {
+        return subscription;
+      }
       return nodeCount
-        ? { ...subscription, nodeCount: nodeCount.count, _nodeCountError: nodeCount.error || null }
-        : subscription;
+        ? {
+            ...subscription,
+            nodeCount: nodeCount.count,
+            _nodeCountError: nodeCount.error || null,
+            _nodeCountErrorReason: nodeCount.errorReason || null,
+          }
+        : {
+            ...subscription,
+            nodeCount: null,
+            _nodeCountError: "missing_result",
+            _nodeCountErrorReason: "未收到节点数量结果",
+          };
+    });
+    this.render();
+  }
+
+  markNodeCountLoadFailed(error) {
+    const reason = error?.message || "获取节点数量失败";
+    this.subscriptions = this.subscriptions.map((subscription) => {
+      if (
+        isActiveSubscription(subscription) &&
+        normalizeType(subscription.type) !== "list" &&
+        subscription.nodeCount === undefined
+      ) {
+        return {
+          ...subscription,
+          nodeCount: null,
+          _nodeCountError: "fetch_failed",
+          _nodeCountErrorReason: reason,
+        };
+      }
+      return subscription;
     });
     this.render();
   }
@@ -808,15 +878,16 @@ class SubscriptionManager {
     const usagePending = !isList && userinfo.pending === true;
     const usageSkipped = !isActive || usageMeta.skipped === "inactive";
     const usageFailed = Boolean(usageMeta.error);
+    const nodeCountFailed = Boolean(subscription._nodeCountError);
     const nodeCountText = isList
       ? String(subscription.nodeCount ?? 0)
       : !isActive
         ? "未读取"
-      : subscription.nodeCount === undefined
-        ? "读取中..."
-        : subscription._nodeCountError
-          ? "--"
-          : String(subscription.nodeCount);
+        : subscription.nodeCount === undefined
+          ? "读取中..."
+          : nodeCountFailed
+            ? `读取失败：${subscription._nodeCountErrorReason || "未知错误"}`
+            : String(subscription.nodeCount);
     const isExhausted =
       !isList &&
       isActive &&
@@ -835,7 +906,7 @@ class SubscriptionManager {
     const usageNotice = usageSkipped
       ? "订阅已停用，不读取流量信息"
       : usageFailed
-        ? `流量读取失败${usageMeta.fromCache ? "，当前显示缓存数据" : "，请稍后重试"}`
+        ? `流量读取失败：${usageMeta.errorReason || "未知错误"}${usageMeta.fromCache ? "（当前显示缓存数据）" : ""}`
         : "";
     const urlPreview = isList
       ? `节点列表 · ${this.parseNodeUrls(subscription.url || "").length} 条`

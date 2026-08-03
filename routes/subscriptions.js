@@ -10,6 +10,11 @@ const {
 } = require("../services/subscription-usage");
 const { getSubscriptionNodeCount } = require("../services/subscription-node-count");
 
+function getFetchErrorReason(error) {
+    const reason = error instanceof Error ? error.message : String(error || "");
+    return reason || "请求失败";
+}
+
 /**
  * 创建订阅管理相关路由
  * @param {object} db - 数据库实例
@@ -129,9 +134,10 @@ function createSubscriptionRoutes(db) {
                                 id: sub.id,
                                 userinfo: cached.userinfo,
                                 updatedAt: cached.updatedAt,
-                                isStale: true,
-                                fromCache: true,
-                                error: "fetch_failed",
+                            isStale: true,
+                            fromCache: true,
+                            error: "fetch_failed",
+                            errorReason: getFetchErrorReason(error),
                             };
                         }
                         return {
@@ -141,6 +147,7 @@ function createSubscriptionRoutes(db) {
                             isStale: true,
                             fromCache: false,
                             error: "fetch_failed",
+                            errorReason: getFetchErrorReason(error),
                         };
                     }
                 })
@@ -176,7 +183,12 @@ function createSubscriptionRoutes(db) {
                         return { id: sub.id, count: await getSubscriptionNodeCount(sub) };
                     } catch (error) {
                         console.error("Failed to count subscription nodes", sub.url, error);
-                        return { id: sub.id, count: null, error: "fetch_failed" };
+                        return {
+                            id: sub.id,
+                            count: null,
+                            error: "fetch_failed",
+                            errorReason: getFetchErrorReason(error),
+                        };
                     }
                 })
             );

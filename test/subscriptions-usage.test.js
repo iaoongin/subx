@@ -97,5 +97,40 @@ test("usage refresh skips disabled subscriptions", async (t) => {
   });
   assert.equal(body.data[2].id, 3);
   assert.equal(body.data[2].error, "fetch_failed");
+  assert.equal(body.data[2].errorReason, "connection failed");
   assert.equal(body.data[2].isStale, true);
+});
+
+test("node count exposes the fetch failure reason", async (t) => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => {
+    throw new Error("connection refused");
+  };
+
+  const app = express();
+  app.use(
+    createSubscriptionRoutes({
+      getAllSubscriptions: async () => [
+        { id: 1, url: "https://failed.example/sub", type: "subscription", active: 1 },
+      ],
+    })
+  );
+
+  const server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => {
+    global.fetch = originalFetch;
+    server.close();
+  });
+
+  const { port } = server.address();
+  const response = await originalFetch(
+    `http://127.0.0.1:${port}/api/subscriptions/node-counts?ids=1`
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(body.data, [
+    { id: 1, count: null, error: "fetch_failed", errorReason: "connection refused" },
+  ]);
 });
