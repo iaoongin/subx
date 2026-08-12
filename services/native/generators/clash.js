@@ -1,4 +1,5 @@
 const BaseGenerator = require("./base");
+const yaml = require("js-yaml");
 
 /**
  * Clash format generator
@@ -213,58 +214,11 @@ class ClashGenerator extends BaseGenerator {
     ];
   }
 
-  toYAML(obj, indent = 0) {
-    const spaces = "  ".repeat(indent);
-    let yaml = "";
-
-    for (const [key, value] of Object.entries(obj)) {
-      if (value === null || value === undefined) {
-        continue;
-      }
-
-      if (Array.isArray(value)) {
-        yaml += `${spaces}${key}:\n`;
-        for (const item of value) {
-          if (typeof item === "object") {
-            const itemYaml = this.toYAML(item, indent + 2);
-            const lines = itemYaml.split("\n").filter((line) => line.trim());
-
-            if (lines.length > 0) {
-              yaml += `${spaces}  - ${lines[0].trim()}\n`;
-              for (let i = 1; i < lines.length; i++) {
-                yaml += `${spaces}    ${lines[i].trim()}\n`;
-              }
-            }
-          } else {
-            yaml += `${spaces}  - ${this.escapeYAML(item)}\n`;
-          }
-        }
-      } else if (typeof value === "object") {
-        yaml += `${spaces}${key}:\n`;
-        yaml += this.toYAML(value, indent + 1);
-      } else {
-        yaml += `${spaces}${key}: ${this.escapeYAML(value)}\n`;
-      }
-    }
-
-    return yaml;
-  }
-
-  escapeYAML(value) {
-    if (typeof value === "string") {
-      if (
-        value.includes(":") ||
-        value.includes("#") ||
-        value.includes("[") ||
-        value.includes("]") ||
-        value.includes("{") ||
-        value.includes("}")
-      ) {
-        return `"${value.replace(/"/g, '\\"')}"`;
-      }
-      return value;
-    }
-    return String(value);
+  toYAML(obj) {
+    return yaml.dump(obj, {
+      lineWidth: -1,
+      noRefs: true,
+    });
   }
 }
 

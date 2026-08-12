@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const yaml = require("js-yaml");
 
 const NodeMerger = require("../../services/native/merger");
 const NativeConverter = require("../../services/native");
@@ -215,6 +216,26 @@ test("clash generator audit reports unsupported types and generation failures", 
     result.discarded.map((item) => item.reason).sort(),
     ["convert-error", "unsupported-type"],
   );
+});
+
+test("clash generator emits YAML-safe string values", () => {
+  const generator = new ClashGenerator();
+  const content = generator.generate([
+    {
+      type: "hysteria2",
+      name: "hy2-@node",
+      server: "example.com",
+      port: 2096,
+      password: "@Telegram@Configvibes",
+      sni: "ftp.debian.org",
+      skip_cert_verify: true,
+    },
+  ]);
+
+  const parsed = yaml.load(content);
+  assert.equal(parsed.proxies[0].password, "@Telegram@Configvibes");
+  assert.equal(parsed.proxies[0].name, "hy2-@node");
+  assert.match(content, /password: ['"]@Telegram@Configvibes['"]/);
 });
 
 test("native converter groups discarded nodes by reason and type", () => {
