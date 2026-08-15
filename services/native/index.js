@@ -5,6 +5,7 @@
 const SubscriptionFetcher = require("./fetcher");
 const NodeMerger = require("./merger");
 const generators = require("./generators");
+const { normalizeOutputFormat } = require("./formats");
 
 class NativeConverter {
   constructor() {
@@ -159,16 +160,8 @@ class NativeConverter {
   }
 
   getGenerator(format) {
-    const formatMap = {
-      ss: generators.SSGenerator,
-      clash: generators.ClashGenerator,
-      v2ray: generators.V2RayGenerator,
-      shadowsocks: generators.SSGenerator,
-      "clash.yaml": generators.ClashGenerator,
-      "v2ray.json": generators.V2RayGenerator,
-    };
-
-    return formatMap[format.toLowerCase()] || null;
+    const normalizedFormat = normalizeOutputFormat(format);
+    return generators[normalizedFormat] || null;
   }
 
   countNodesByType(nodes) {
@@ -252,8 +245,8 @@ class NativeConverter {
   }
 
   getOutputStats(format, result, nodes) {
-    const fmt = (format || "").toLowerCase();
-    if (fmt === "ss" || fmt === "shadowsocks") {
+    const fmt = normalizeOutputFormat(format);
+    if (fmt === "uri") {
       try {
         const decoded = Buffer.from(result || "", "base64").toString("utf8");
         const lines = decoded.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);

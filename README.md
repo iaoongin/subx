@@ -28,7 +28,7 @@
 - 配置热更新，无需重启服务
 
 ### 🔄 订阅转换
-- 支持多种客户端格式转换（本地支持 ss/clash/v2ray，其他格式依赖远程转换）
+- 支持多种客户端格式转换（本地支持 URI/Clash/V2Ray，其他格式依赖远程转换）
 - 智能客户端识别
 - 批量订阅合并
 - 公开API，无需登录即可使用
@@ -36,7 +36,7 @@
 - **远程转换器**：支持调用远程转换 API
 - **智能回退**：本地转换失败时自动切换到远程（可关闭）
 - **灵活模式**：支持手动指定转换模式（native/remote）
-- **SS 输出多协议**：原生模式下 SS 输出可保留多协议 URI
+- **URI 输出多协议**：原生模式下 URI 输出可保留 SS、VMess、VLESS、Trojan 等多协议链接
 
 ### 📊 日志系统
 - **Winston 日志框架**：成熟稳定的企业级日志方案
@@ -168,7 +168,7 @@
    - **访问令牌**: 用于订阅转换API的身份验证
    - **文件名称**: 订阅文件的显示名称
    - **更新间隔**: 订阅自动更新的时间间隔
-   - **默认预览格式**: 预览按钮默认输出 ss 或 clash
+   - **默认预览格式**: 预览按钮默认输出 URI、Clash 或 V2Ray
    - **管理员密码**: 登录系统的密码
    - **Telegram配置**: 可选的通知功能
 
@@ -185,7 +185,7 @@
 系统支持三种转换模式：
 
 1. **本地模式（native）**：使用内置转换器，速度快，无需外部依赖  
-   - 原生输出支持：`ss` / `clash` / `v2ray`
+   - 原生输出支持：`uri` / `clash` / `v2ray`（`ss` 仍兼容为 URI 别名）
 2. **远程模式（remote）**：调用远程转换API，功能更强大  
    - 由远程服务决定支持的客户端格式（如 Surge/SingBox/QuanX/Loon 等）
 3. **自动模式（默认）**：优先使用本地转换，失败后自动回退到远程（可通过 `fallbackEnabled` 关闭）
@@ -212,7 +212,7 @@ curl "http://localhost:3000/your-token"
 #### 支持的客户端
 
 - **Clash**: 在URL中添加 `?clash=1` 或使用Clash客户端User-Agent（native/remote 均支持）
-- **SS**: 默认返回 SS 格式（native/remote 均支持）
+- **URI**: 默认返回 Base64 编码的多协议 URI 订阅（native/remote 均支持）
 - **Surge / SingBox / Quantumult X / Loon**: 需使用 `remote` 模式（或开启回退），由远程转换器提供支持
 
 #### 示例
@@ -220,6 +220,12 @@ curl "http://localhost:3000/your-token"
 ```bash
 # Clash 格式
 curl "http://localhost:3000/your-token?clash=1"
+
+# URI 格式
+curl "http://localhost:3000/your-token?uri=1"
+
+# V2Ray 格式
+curl "http://localhost:3000/your-token?v2ray=1"
 
 # SingBox 格式  
 curl "http://localhost:3000/your-token?singbox=1"
@@ -281,7 +287,7 @@ subx/
     "total": 99,                        // 总流量限制（TB）
     "timestamp": 4102329600000,         // 过期时间戳
     "adminPassword": "YOUR_ADMIN_PASSWORD_HERE", // 管理员密码
-    "defaultPreviewFormat": "ss",       // 默认预览格式: ss/clash
+    "defaultPreviewFormat": "uri",      // 默认预览格式: uri/clash/v2ray
 
     // 转换器配置
     "conversionMode": "native",         // 转换模式: auto/native/remote
@@ -438,7 +444,7 @@ type logs\app-2026-02-04.log
 
 ### Q: 本地转换器和远程转换器的区别？
 A:
-- **本地转换器**：速度快，无网络依赖，原生输出支持 `ss/clash/v2ray`
+- **本地转换器**：速度快，无网络依赖，原生输出支持 `uri/clash/v2ray`
 - **远程转换器**：功能更全面，需要网络连接，支持更多客户端格式
 - **自动模式**：优先本地，失败时自动切换远程（可通过 `fallbackEnabled` 关闭）
 

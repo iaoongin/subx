@@ -45,6 +45,6 @@
     "nativeConverterEnabled": true,
     "remoteConverterUrl": "https://subc.00321.xyz",
     "remoteConverterProtocol": "https",
-    "defaultPreviewFormat": "ss"
+    "defaultPreviewFormat": "uri"
   }
 }

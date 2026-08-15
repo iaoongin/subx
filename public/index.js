@@ -47,6 +47,12 @@ function normalizeType(type) {
   return type || "subscription";
 }
 
+function normalizePreviewFormat(format) {
+  const normalized = String(format || "").toLowerCase();
+  if (["clash", "v2ray"].includes(normalized)) return normalized;
+  return "uri";
+}
+
 function getTheme() {
   return document.documentElement.dataset.theme === "light" ? "light" : "dark";
 }
@@ -565,9 +571,11 @@ class SubscriptionManager {
   }
 
   buildPreviewUrl(token, format) {
-    const normalized = String(format || "ss").toLowerCase();
+    const normalized = normalizePreviewFormat(format);
     const basePath = `/${token}`;
-    return normalized === "clash" ? `${basePath}?clash=1` : basePath;
+    if (normalized === "clash") return `${basePath}?clash=1`;
+    if (normalized === "v2ray") return `${basePath}?v2ray=1`;
+    return `${basePath}?uri=1`;
   }
 
   refreshSubscription() {
@@ -1361,7 +1369,7 @@ class ConfigManager {
     document.getElementById("modal-token").value = config.token || "";
     document.getElementById("modal-fileName").value = config.fileName || "";
     document.getElementById("modal-defaultPreviewFormat").value =
-      config.defaultPreviewFormat || "ss";
+      normalizePreviewFormat(config.defaultPreviewFormat);
     CustomSelect.syncById("modal-defaultPreviewFormat");
     document.getElementById("modal-subUpdateTime").value = config.subUpdateTime || 6;
     document.getElementById("modal-total").value = config.total ?? 0;
@@ -1375,7 +1383,7 @@ class ConfigManager {
     this.extensionScriptEditor.setValue(extensionScript || DEFAULT_EXTENSION_SCRIPT);
     this.currentConfig = {
       ...config,
-      defaultPreviewFormat: config.defaultPreviewFormat || "ss",
+      defaultPreviewFormat: normalizePreviewFormat(config.defaultPreviewFormat),
     };
     if (typeof subscriptionManager !== "undefined") {
       subscriptionManager.render();
@@ -1387,7 +1395,7 @@ class ConfigManager {
       token: document.getElementById("modal-token").value.trim(),
       fileName: document.getElementById("modal-fileName").value.trim(),
       defaultPreviewFormat:
-        document.getElementById("modal-defaultPreviewFormat").value || "ss",
+        normalizePreviewFormat(document.getElementById("modal-defaultPreviewFormat").value),
       subUpdateTime:
         parseInt(document.getElementById("modal-subUpdateTime").value, 10) || 6,
       total:
@@ -1466,7 +1474,7 @@ class ConfigManager {
   }
 
   getDefaultPreviewFormat() {
-    return this.currentConfig?.defaultPreviewFormat || "ss";
+    return normalizePreviewFormat(this.currentConfig?.defaultPreviewFormat);
   }
 
   showMessage(message, type = "info") {

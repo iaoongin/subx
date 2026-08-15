@@ -58,6 +58,10 @@ class ClashGenerator extends BaseGenerator {
       proxy.type = "ss";
       proxy.cipher = node.method;
       proxy.password = node.password;
+      if (node.plugin) {
+        proxy.plugin = node.plugin;
+        proxy["plugin-opts"] = node.plugin_opts || {};
+      }
     } else if (node.type === "vmess") {
       proxy.type = "vmess";
       proxy.uuid = node.uuid;

@@ -13,12 +13,12 @@ class ShadowsocksParser extends BaseParser {
      */
     parse(uri) {
         try {
-            if (!uri.startsWith('ss://')) {
+            if (!/^ss:\/\//i.test(uri)) {
                 return null;
             }
 
             // 移除 ss:// 前缀
-            let content = uri.slice(5);
+            let content = uri.slice(uri.indexOf('://') + 3);
 
             // 提取节点名称 (fragment)
             let name = '';
@@ -79,8 +79,17 @@ class ShadowsocksParser extends BaseParser {
                 if (queryIndex !== -1) {
                     const params = this.parseQuery(serverInfo.slice(queryIndex));
                     if (params.plugin) {
-                        // 暂不处理插件，可以在此扩展
-                        console.log('检测到插件:', params.plugin);
+                        const pluginParts = params.plugin.split(';');
+                        node.plugin = pluginParts.shift() || '';
+                        node.plugin_opts = Object.fromEntries(
+                            pluginParts
+                                .map((part) => {
+                                    const separatorIndex = part.indexOf('=');
+                                    if (separatorIndex === -1) return [part, ''];
+                                    return [part.slice(0, separatorIndex), part.slice(separatorIndex + 1)];
+                                })
+                                .filter(([key]) => key),
+                        );
                     }
                 }
             } else {

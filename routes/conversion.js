@@ -9,6 +9,7 @@ const {
 } = require("../services/converter");
 const { applyExtensionScriptToContent, getExtensionScript, normalizeScript } = require("../services/extension-script");
 const { base64Encode } = require("../utils/encoding");
+const { normalizeOutputFormat } = require("../services/native/formats");
 const cache = require("../services/cache");
 const {
     getCurrentSubscriptionUsage,
@@ -157,7 +158,7 @@ function createConversionRoutes(db) {
 
         const { subProtocol, subConverter } = getConverterConfig();
 
-        if (format === "ss") {
+        if (normalizeOutputFormat(format) === "uri") {
             // 协议数组
             const 协议列表 = ["ss", "ssr", "v2ray", "trojan"];
             let 合并内容 = await fetchInBatches(协议列表, 编码后的订阅URLs);

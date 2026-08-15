@@ -27,7 +27,7 @@ class Database {
         filterExhaustedSubscriptions: true,
         remoteConverterUrl: "https://subc.00321.xyz",
         remoteConverterProtocol: "https",
-        defaultPreviewFormat: "ss",
+        defaultPreviewFormat: "uri",
       },
     };
     this.init();
@@ -75,7 +75,7 @@ class Database {
       filterExhaustedSubscriptions: true,
       remoteConverterUrl: "https://subc.00321.xyz",
       remoteConverterProtocol: "https",
-      defaultPreviewFormat: "ss",
+      defaultPreviewFormat: "uri",
     };
 
     for (const [key, defaultValue] of Object.entries(defaultConfig)) {
@@ -230,7 +230,7 @@ class Database {
         filterExhaustedSubscriptions: true,
         remoteConverterUrl: "https://subc.00321.xyz",
         remoteConverterProtocol: "https",
-        defaultPreviewFormat: "ss",
+        defaultPreviewFormat: "uri",
       },
     };
     this.saveData();
@@ -463,7 +463,7 @@ class Database {
           filterExhaustedSubscriptions: true,
           remoteConverterUrl: "https://subc.00321.xyz",
           remoteConverterProtocol: "https",
-          defaultPreviewFormat: "ss",
+          defaultPreviewFormat: "uri",
         };
 
         if (this.saveData()) {

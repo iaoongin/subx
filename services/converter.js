@@ -68,12 +68,25 @@ function detectSubscriptionFormat(userAgentHeader, query) {
         userAgentHeader.includes("nekobox") ||
         userAgentHeader.includes("cf-workers-sub")
     ) {
-        return "ss";
+        return "uri";
     } else if (
         userAgentHeader.includes("clash") ||
         ("clash" in query && !userAgentHeader.includes("subconverter"))
     ) {
         return "clash";
+    } else if (
+        userAgentHeader.includes("v2ray") ||
+        userAgentHeader.includes("xray") ||
+        (("v2ray" in query || "xray" in query) &&
+            !userAgentHeader.includes("subconverter"))
+    ) {
+        return "v2ray";
+    } else if (
+        "uri" in query ||
+        "ss" in query ||
+        "base64" in query
+    ) {
+        return "uri";
     } else if (
         userAgentHeader.includes("sing-box") ||
         userAgentHeader.includes("singbox") ||
@@ -98,7 +111,7 @@ function detectSubscriptionFormat(userAgentHeader, query) {
         return "loon";
     }
 
-    return "ss";
+    return "uri";
 }
 
 /**

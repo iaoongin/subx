@@ -53,6 +53,8 @@ class BaseParser {
             uuid: '',           // UUID (vless/vmess)
             password: '',       // 密码 (trojan/ss)
             method: '',         // 加密方法 (ss)
+            plugin: '',          // Shadowsocks 插件
+            plugin_opts: {},     // Shadowsocks 插件参数
             network: 'tcp',     // 传输协议 (tcp/ws/grpc/h2/http/xhttp/httpupgrade/kcp/quic)
             tls: false,         // 是否启用TLS
             sni: '',            // SNI
