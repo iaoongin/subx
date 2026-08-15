@@ -1,5 +1,9 @@
 let loadingRequestCount = 0;
 const THEME_STORAGE_KEY = "subx-theme";
+const SELECTED_GROUP_QUERY_KEY = "group";
+const STATUS_FILTER_QUERY_KEY = "status";
+const TYPE_FILTER_QUERY_KEY = "type";
+const SEARCH_QUERY_KEY = "search";
 
 const DEFAULT_EXTENSION_SCRIPT = `function main(config, profileName) {
   const content = JSON.parse(JSON.stringify(config));
@@ -45,6 +49,51 @@ function hideLoading() {
 function normalizeType(type) {
   if (type === "node") return "list";
   return type || "subscription";
+}
+
+function normalizeStatusFilter(status) {
+  return ["active", "inactive"].includes(status) ? status : "all";
+}
+
+function normalizeTypeFilter(type) {
+  return ["subscription", "list"].includes(type) ? type : "all";
+}
+
+function getPageQueryParam(key) {
+  try {
+    return new URL(window.location.href).searchParams.get(key);
+  } catch (error) {
+    console.warn(`Failed to read URL parameter: ${key}`, error);
+    return null;
+  }
+}
+
+function setPageQueryParam(key, value) {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set(key, String(value));
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+  } catch (error) {
+    console.warn(`Failed to save URL parameter: ${key}`, error);
+  }
+}
+
+function deletePageQueryParam(key) {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete(key);
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+  } catch (error) {
+    console.warn(`Failed to clear URL parameter: ${key}`, error);
+  }
 }
 
 function normalizePreviewFormat(format) {
@@ -427,13 +476,24 @@ class SubscriptionManager {
     this.currentGroupId = null;
     this.currentGroupToken = null;
     this.filters = {
-      search: "",
-      status: "all",
-      type: "all",
+      search: (getPageQueryParam(SEARCH_QUERY_KEY) || "").trim().toLowerCase(),
+      status: normalizeStatusFilter(getPageQueryParam(STATUS_FILTER_QUERY_KEY)),
+      type: normalizeTypeFilter(getPageQueryParam(TYPE_FILTER_QUERY_KEY)),
     };
   }
 
   init() {
+    const searchInput = document.getElementById("subscriptionSearch");
+    if (searchInput) {
+      searchInput.value = this.filters.search;
+    }
+
+    const typeFilter = document.getElementById("subscriptionTypeFilter");
+    if (typeFilter) {
+      typeFilter.value = this.filters.type;
+      CustomSelect.syncById("subscriptionTypeFilter");
+    }
+
     this.bindEvents();
   }
 
@@ -460,6 +520,7 @@ class SubscriptionManager {
       .getElementById("subscriptionSearch")
       ?.addEventListener("input", (event) => {
         this.filters.search = event.target.value.trim().toLowerCase();
+        this.saveSearchFilter();
         this.render();
       });
 
@@ -467,7 +528,8 @@ class SubscriptionManager {
       .querySelectorAll("[data-status-filter]")
       .forEach((button) =>
         button.addEventListener("click", () => {
-          this.filters.status = button.dataset.statusFilter || "all";
+          this.filters.status = normalizeStatusFilter(button.dataset.statusFilter);
+          this.saveStatusFilter();
           this.updateFilterButtons();
           this.render();
         })
@@ -476,7 +538,8 @@ class SubscriptionManager {
     document
       .getElementById("subscriptionTypeFilter")
       ?.addEventListener("change", (event) => {
-        this.filters.type = event.target.value || "all";
+        this.filters.type = normalizeTypeFilter(event.target.value);
+        this.saveTypeFilter();
         this.render();
       });
 
@@ -511,6 +574,33 @@ class SubscriptionManager {
         button.dataset.statusFilter === this.filters.status
       );
     });
+  }
+
+  saveStatusFilter() {
+    if (this.filters.status === "all") {
+      deletePageQueryParam(STATUS_FILTER_QUERY_KEY);
+      return;
+    }
+
+    setPageQueryParam(STATUS_FILTER_QUERY_KEY, this.filters.status);
+  }
+
+  saveTypeFilter() {
+    if (this.filters.type === "all") {
+      deletePageQueryParam(TYPE_FILTER_QUERY_KEY);
+      return;
+    }
+
+    setPageQueryParam(TYPE_FILTER_QUERY_KEY, this.filters.type);
+  }
+
+  saveSearchFilter() {
+    if (!this.filters.search) {
+      deletePageQueryParam(SEARCH_QUERY_KEY);
+      return;
+    }
+
+    setPageQueryParam(SEARCH_QUERY_KEY, this.filters.search);
   }
 
   getFilteredSubscriptions() {
@@ -1132,6 +1222,10 @@ class SubscriptionManager {
       type: "all",
     };
 
+    deletePageQueryParam(SEARCH_QUERY_KEY);
+    deletePageQueryParam(STATUS_FILTER_QUERY_KEY);
+    deletePageQueryParam(TYPE_FILTER_QUERY_KEY);
+
     document.getElementById("subscriptionSearch").value = "";
     document.getElementById("subscriptionTypeFilter").value = "all";
     CustomSelect.syncById("subscriptionTypeFilter");
@@ -1517,6 +1611,7 @@ class GroupManager {
       this.renderGroupSelect();
 
       if (!this.groups.length) {
+        this.clearUrlGroupId();
         this.currentGroup = null;
         subscriptionManager.setGroup(null, null);
         subscriptionManager.clearSubscriptions();
@@ -1528,6 +1623,7 @@ class GroupManager {
       const candidateId =
         preferredGroupId ||
         this.currentGroup?.id ||
+        this.getUrlGroupId() ||
         this.groups[0]?.id;
 
       const nextGroup =
@@ -1608,6 +1704,7 @@ class GroupManager {
   async onGroupChange(groupId) {
     const group = this.groups.find((item) => String(item.id) === String(groupId));
     if (!group) {
+      this.clearUrlGroupId();
       this.currentGroup = null;
       subscriptionManager.setGroup(null, null);
       subscriptionManager.clearSubscriptions();
@@ -1617,12 +1714,25 @@ class GroupManager {
     }
 
     this.currentGroup = group;
+    this.saveUrlGroupId(group.id);
     document.getElementById("groupSelect").value = String(group.id);
     CustomSelect.syncById("groupSelect");
     subscriptionManager.setGroup(group.id, group.token);
     this.renderCurrentGroupSummary(subscriptionManager.subscriptions.length);
     this.renderGroupList();
     await subscriptionManager.loadSubscriptions();
+  }
+
+  getUrlGroupId() {
+    return getPageQueryParam(SELECTED_GROUP_QUERY_KEY);
+  }
+
+  saveUrlGroupId(groupId) {
+    setPageQueryParam(SELECTED_GROUP_QUERY_KEY, groupId);
+  }
+
+  clearUrlGroupId() {
+    deletePageQueryParam(SELECTED_GROUP_QUERY_KEY);
   }
 
   getCurrentGroupUrl() {
