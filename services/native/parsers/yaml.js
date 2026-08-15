@@ -199,18 +199,44 @@ class YAMLParser extends BaseParser {
         node.server = proxy.server;
         node.port = parseInt(proxy.port, 10);
         node.uuid = proxy.uuid;
+        node.cipher = proxy.encryption ?? 'none';
         node.flow = proxy.flow || '';
-        node.network = proxy.network || 'tcp';
+        node.network = (proxy.network || 'tcp').toLowerCase();
+        if (node.network === 'http-upgrade') node.network = 'httpupgrade';
         node.udp = proxy.udp !== false;
 
         // TLS 配置
-        node.tls = proxy.tls === true || proxy.tls === 'true';
-        if (node.tls) {
-            node.sni = proxy.sni || proxy.servername || '';
-            node.skip_cert_verify = proxy['skip-cert-verify'] === true;
-            if (proxy.alpn) {
-                node.alpn = Array.isArray(proxy.alpn) ? proxy.alpn : [proxy.alpn];
-            }
+        const realityOpts = proxy['reality-opts'] || {};
+        node.security = String(proxy.security || (Object.keys(realityOpts).length > 0
+            ? 'reality'
+            : (proxy.tls === true || proxy.tls === 'true' || proxy.tls === 'tls' ? 'tls' : 'none'))).toLowerCase();
+        node.tls = node.security === 'tls' || node.security === 'reality';
+        node.client_fingerprint = proxy['client-fingerprint'] || proxy.fingerprint || '';
+        node.packet_encoding = proxy['packet-encoding'] || proxy.packetEncoding || '';
+        node.reality_opts = {
+            public_key: realityOpts['public-key'] || '',
+            short_id: realityOpts['short-id'] || '',
+            spider_x: realityOpts['spider-x'] || '',
+            mldsa65_verify: realityOpts['mldsa65-verify'] || ''
+        };
+        node.uri_params = proxy['uri-params'] || {};
+        node.sni = proxy.sni || proxy.servername || proxy['server-name'] || '';
+        node.skip_cert_verify = this.toBoolean(proxy['skip-cert-verify']);
+        if (proxy.alpn) {
+            node.alpn = this.toList(proxy.alpn);
+        }
+        const tlsOpts = proxy['tls-opts'] || {};
+        node.tls_opts = {
+            ech_config: tlsOpts['ech-config'] || tlsOpts.echConfig || '',
+            ech_doh_server: tlsOpts['ech-doh-server'] || tlsOpts.echDohServer || '',
+            ech_force_query: this.toBoolean(tlsOpts['ech-force-query'] ?? tlsOpts.echForceQuery),
+            pinned_peer_certificate_chain_sha256: this.toList(
+                tlsOpts['pin-sha256'] || tlsOpts.pinSHA256 || tlsOpts['pinned-peer-certificate-chain-sha256']
+            )
+        };
+
+        if (proxy['header-type']) {
+            node.tcp_opts.header_type = proxy['header-type'];
         }
 
         // 传输层配置
@@ -220,16 +246,79 @@ class YAMLParser extends BaseParser {
             if (wsOpts.headers) {
                 node.ws_opts.headers = wsOpts.headers;
             }
-        } else if (node.network === 'h2' || node.network === 'http') {
+            node.ws_opts.max_early_data = parseInt(wsOpts['max-early-data'] || 0, 10) || 0;
+            node.ws_opts.early_data_header_name = wsOpts['early-data-header-name'] || '';
+        } else if (node.network === 'h2') {
             const h2Opts = proxy['h2-opts'] || {};
             node.h2_opts.path = h2Opts.path || '/';
-            node.h2_opts.host = h2Opts.host || [];
+            node.h2_opts.host = this.toList(h2Opts.host);
+            node.h2_opts.method = h2Opts.method || '';
+            node.h2_opts.headers = h2Opts.headers || {};
+        } else if (node.network === 'http') {
+            const httpOpts = proxy['http-opts'] || {};
+            node.h2_opts.path = Array.isArray(httpOpts.path)
+                ? (httpOpts.path[0] || '/')
+                : (httpOpts.path || '/');
+            node.h2_opts.host = this.toList(httpOpts.host || httpOpts.headers?.Host);
+            node.h2_opts.method = httpOpts.method || '';
+            node.h2_opts.headers = httpOpts.headers || {};
         } else if (node.network === 'grpc') {
             const grpcOpts = proxy['grpc-opts'] || {};
             node.grpc_opts.service_name = grpcOpts['grpc-service-name'] || '';
+            node.grpc_opts.authority = grpcOpts.authority || '';
+            node.grpc_opts.mode = grpcOpts['grpc-mode'] || grpcOpts.mode || '';
+        } else if (node.network === 'httpupgrade') {
+            const httpUpgradeOpts = proxy['http-upgrade-opts'] || proxy['httpupgrade-opts'] || {};
+            node.httpupgrade_opts.path = httpUpgradeOpts.path || '/';
+            node.httpupgrade_opts.host = httpUpgradeOpts.host || '';
+            node.httpupgrade_opts.headers = httpUpgradeOpts.headers || {};
+        } else if (node.network === 'xhttp' || node.network === 'splithttp') {
+            const xhttpOpts = proxy['xhttp-opts'] || {};
+            node.xhttp_opts.path = xhttpOpts.path || '/';
+            node.xhttp_opts.host = this.toList(xhttpOpts.host);
+            node.xhttp_opts.mode = xhttpOpts.mode || '';
+            node.xhttp_opts.extra = xhttpOpts.extra || {};
+            node.xhttp_opts.sc_max_each_post_bytes = this.toInteger(
+                xhttpOpts['sc-max-each-post-bytes'] || xhttpOpts.scMaxEachPostBytes
+            );
+            node.xhttp_opts.no_sse_header = this.toBoolean(
+                xhttpOpts['no-sse-header'] ?? xhttpOpts.noSSEHeader
+            );
+            node.xhttp_opts.xmux = xhttpOpts.xmux || {};
+        } else if (node.network === 'quic') {
+            const quicOpts = proxy['quic-opts'] || {};
+            node.quic_opts.security = quicOpts.security || '';
+            node.quic_opts.key = quicOpts.key || '';
+            node.quic_opts.header_type = quicOpts['header-type'] || proxy['header-type'] || '';
+        } else if (node.network === 'kcp' || node.network === 'mkcp') {
+            const kcpOpts = proxy['kcp-opts'] || {};
+            node.kcp_opts.mtu = parseInt(kcpOpts.mtu || 0, 10) || 0;
+            node.kcp_opts.tti = parseInt(kcpOpts.tti || 0, 10) || 0;
+            node.kcp_opts.uplink_capacity = parseInt(kcpOpts['uplink-capacity'] || 0, 10) || 0;
+            node.kcp_opts.downlink_capacity = parseInt(kcpOpts['downlink-capacity'] || 0, 10) || 0;
+            node.kcp_opts.congestion = kcpOpts.congestion === true;
+            node.kcp_opts.read_buffer_size = parseInt(kcpOpts['read-buffer-size'] || 0, 10) || 0;
+            node.kcp_opts.write_buffer_size = parseInt(kcpOpts['write-buffer-size'] || 0, 10) || 0;
+            node.kcp_opts.seed = kcpOpts.seed || '';
+            node.kcp_opts.header_type = kcpOpts['header-type'] || proxy['header-type'] || '';
         }
 
         return node;
+    }
+
+    toBoolean(value) {
+        return value === true || ['1', 'true', 'yes'].includes(String(value || '').toLowerCase());
+    }
+
+    toInteger(value) {
+        const parsed = Number(value);
+        return Number.isInteger(parsed) ? parsed : 0;
+    }
+
+    toList(value) {
+        if (!value) return [];
+        if (Array.isArray(value)) return value.filter(Boolean);
+        return String(value).split(',').map((item) => item.trim()).filter(Boolean);
     }
 
     /**

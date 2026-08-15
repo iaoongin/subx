@@ -109,28 +109,143 @@ class ClashGenerator extends BaseGenerator {
     } else if (node.type === "vless") {
       proxy.type = "vless";
       proxy.uuid = node.uuid;
+      proxy.encryption = node.cipher || "none";
       proxy.tls = node.tls;
-      proxy.network = node.network || "tcp";
+      proxy.network = node.network === "splithttp" ? "xhttp" : (node.network || "tcp");
 
       if (node.flow) {
         proxy.flow = node.flow;
       }
+      if (node.packet_encoding) {
+        proxy["packet-encoding"] = node.packet_encoding;
+      }
+      if (node.alpn && node.alpn.length > 0) {
+        proxy.alpn = node.alpn;
+      }
+      if (node.client_fingerprint) {
+        proxy["client-fingerprint"] = node.client_fingerprint;
+      }
 
       if (node.network === "ws") {
+        const wsOpts = node.ws_opts || {};
         proxy["ws-opts"] = {
-          path: node.ws_opts.path || "/",
-          headers: node.ws_opts.headers || {},
+          path: wsOpts.path || "/",
+          headers: wsOpts.headers || {},
         };
+        if (wsOpts.max_early_data) {
+          proxy["ws-opts"]["max-early-data"] = wsOpts.max_early_data;
+        }
+        if (wsOpts.early_data_header_name) {
+          proxy["ws-opts"]["early-data-header-name"] = wsOpts.early_data_header_name;
+        }
       } else if (node.network === "grpc") {
+        const grpcOpts = node.grpc_opts || {};
         proxy["grpc-opts"] = {
-          "grpc-service-name": node.grpc_opts.service_name || "",
+          "grpc-service-name": grpcOpts.service_name || "",
         };
+        if (grpcOpts.authority) {
+          proxy["grpc-opts"].authority = grpcOpts.authority;
+        }
+        if (grpcOpts.mode) {
+          proxy["grpc-opts"]["grpc-mode"] = grpcOpts.mode;
+        }
+      } else if (node.network === "h2") {
+        const h2Opts = node.h2_opts || {};
+        proxy["h2-opts"] = {
+          host: h2Opts.host || [],
+          path: h2Opts.path || "/",
+        };
+        if (h2Opts.method) {
+          proxy["h2-opts"].method = h2Opts.method;
+        }
+        if (h2Opts.headers && Object.keys(h2Opts.headers).length > 0) {
+          proxy["h2-opts"].headers = h2Opts.headers;
+        }
+      } else if (node.network === "http") {
+        const h2Opts = node.h2_opts || {};
+        const headers = { ...(h2Opts.headers || {}) };
+        if (h2Opts.host && h2Opts.host.length > 0 && !headers.Host) {
+          headers.Host = h2Opts.host;
+        }
+        proxy["http-opts"] = {
+          method: h2Opts.method || "GET",
+          headers,
+          path: [h2Opts.path || "/"],
+        };
+      } else if (node.network === "xhttp" || node.network === "splithttp") {
+        const xhttpOpts = node.xhttp_opts || {};
+        proxy["xhttp-opts"] = {
+          path: xhttpOpts.path || "/",
+          mode: xhttpOpts.mode || "auto",
+          host: xhttpOpts.host || [],
+          extra: xhttpOpts.extra || {},
+        };
+        if (xhttpOpts.sc_max_each_post_bytes) {
+          proxy["xhttp-opts"]["sc-max-each-post-bytes"] = xhttpOpts.sc_max_each_post_bytes;
+        }
+        if (xhttpOpts.no_sse_header) {
+          proxy["xhttp-opts"]["no-sse-header"] = true;
+        }
+        if (xhttpOpts.xmux && Object.keys(xhttpOpts.xmux).length > 0) {
+          proxy["xhttp-opts"].xmux = xhttpOpts.xmux;
+        }
+      } else if (node.network === "httpupgrade") {
+        const httpUpgradeOpts = node.httpupgrade_opts || {};
+        proxy["http-upgrade-opts"] = {
+          path: httpUpgradeOpts.path || "/",
+          host: httpUpgradeOpts.host || "",
+          headers: httpUpgradeOpts.headers || {},
+        };
+      } else if (node.network === "quic") {
+        const quicOpts = node.quic_opts || {};
+        proxy["quic-opts"] = {
+          security: quicOpts.security || "",
+          key: quicOpts.key || "",
+        };
+        if (quicOpts.header_type) {
+          proxy["quic-opts"]["header-type"] = quicOpts.header_type;
+        }
+      } else if (node.network === "kcp" || node.network === "mkcp") {
+        const kcpOpts = node.kcp_opts || {};
+        proxy["kcp-opts"] = {
+          mtu: kcpOpts.mtu || 0,
+          tti: kcpOpts.tti || 0,
+          "uplink-capacity": kcpOpts.uplink_capacity || 0,
+          "downlink-capacity": kcpOpts.downlink_capacity || 0,
+          congestion: kcpOpts.congestion === true,
+          "read-buffer-size": kcpOpts.read_buffer_size || 0,
+          "write-buffer-size": kcpOpts.write_buffer_size || 0,
+          seed: kcpOpts.seed || "",
+        };
+        if (kcpOpts.header_type) {
+          proxy["kcp-opts"]["header-type"] = kcpOpts.header_type;
+        }
+      } else if (node.tcp_opts?.header_type) {
+        proxy["header-type"] = node.tcp_opts.header_type;
       }
 
       if (node.tls) {
         proxy.servername = node.sni || node.server;
         if (node.skip_cert_verify) {
           proxy["skip-cert-verify"] = true;
+        }
+      }
+      if (node.security === "reality") {
+        const realityOpts = {};
+        if (node.reality_opts?.public_key) {
+          realityOpts["public-key"] = node.reality_opts.public_key;
+        }
+        if (node.reality_opts?.short_id) {
+          realityOpts["short-id"] = node.reality_opts.short_id;
+        }
+        if (node.reality_opts?.spider_x) {
+          realityOpts["spider-x"] = node.reality_opts.spider_x;
+        }
+        if (node.reality_opts?.mldsa65_verify) {
+          realityOpts["mldsa65-verify"] = node.reality_opts.mldsa65_verify;
+        }
+        if (Object.keys(realityOpts).length > 0) {
+          proxy["reality-opts"] = realityOpts;
         }
       }
     } else if (node.type === "hysteria2") {

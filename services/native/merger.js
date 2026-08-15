@@ -75,8 +75,10 @@ class NodeMerger {
     getNodeIdentity(node) {
         switch (node.type) {
             case "vmess":
-            case "vless":
                 return node.uuid ? `uuid:${node.uuid}` : "";
+            case "vless":
+                if (!node.uuid) return "";
+                return `uuid:${node.uuid}:config=${this.serializeVlessConfig(node)}`;
             case "trojan":
             case "hysteria2":
                 return node.password ? `password:${node.password}` : "";
@@ -87,6 +89,36 @@ class NodeMerger {
             default:
                 return "";
         }
+    }
+
+    serializeVlessConfig(node) {
+        const uriParams = node.uri_params || {};
+        if (Object.keys(uriParams).length > 0) {
+            return JSON.stringify(
+                Object.fromEntries(Object.entries(uriParams).sort(([left], [right]) => left.localeCompare(right))),
+            );
+        }
+
+        return JSON.stringify({
+            cipher: node.cipher || "",
+            flow: node.flow || "",
+            security: node.security || (node.tls ? "tls" : "none"),
+            network: node.network || "tcp",
+            sni: node.sni || "",
+            alpn: node.alpn || [],
+            packet_encoding: node.packet_encoding || "",
+            client_fingerprint: node.client_fingerprint || "",
+            reality_opts: node.reality_opts || {},
+            ws_opts: node.ws_opts || {},
+            grpc_opts: node.grpc_opts || {},
+            h2_opts: node.h2_opts || {},
+            httpupgrade_opts: node.httpupgrade_opts || {},
+            xhttp_opts: node.xhttp_opts || {},
+            quic_opts: node.quic_opts || {},
+            kcp_opts: node.kcp_opts || {},
+            tcp_opts: node.tcp_opts || {},
+            tls_opts: node.tls_opts || {}
+        });
     }
 
     withSourceName(node, sourceName) {

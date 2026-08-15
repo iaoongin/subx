@@ -53,7 +53,7 @@ class BaseParser {
             uuid: '',           // UUID (vless/vmess)
             password: '',       // 密码 (trojan/ss)
             method: '',         // 加密方法 (ss)
-            network: 'tcp',     // 传输协议 (tcp/ws/grpc/h2)
+            network: 'tcp',     // 传输协议 (tcp/ws/grpc/h2/http/xhttp/httpupgrade/kcp/quic)
             tls: false,         // 是否启用TLS
             sni: '',            // SNI
             alpn: [],           // ALPN
@@ -61,22 +61,82 @@ class BaseParser {
             // WebSocket 相关
             ws_opts: {
                 path: '',
-                headers: {}
+                headers: {},
+                max_early_data: 0,
+                early_data_header_name: ''
             },
             // gRPC 相关
             grpc_opts: {
-                service_name: ''
+                service_name: '',
+                authority: '',
+                mode: ''
             },
             // HTTP/2 相关
             h2_opts: {
                 host: [],
-                path: ''
+                path: '',
+                method: '',
+                headers: {}
+            },
+            // HTTPUpgrade 相关
+            httpupgrade_opts: {
+                host: '',
+                path: '',
+                headers: {}
+            },
+            // XHTTP 相关
+            xhttp_opts: {
+                host: [],
+                path: '',
+                mode: '',
+                extra: {},
+                sc_max_each_post_bytes: 0,
+                no_sse_header: false,
+                xmux: {}
+            },
+            // QUIC 相关
+            quic_opts: {
+                security: '',
+                key: '',
+                header_type: ''
+            },
+            // mKCP 相关
+            kcp_opts: {
+                mtu: 0,
+                tti: 0,
+                uplink_capacity: 0,
+                downlink_capacity: 0,
+                congestion: false,
+                read_buffer_size: 0,
+                write_buffer_size: 0,
+                seed: '',
+                header_type: ''
             },
             // VMess 特有
             alterId: 0,
             cipher: 'auto',
             // VLESS 特有
             flow: '',
+            security: 'none',       // none/tls/reality
+            client_fingerprint: '', // Reality/TLS 指纹
+            packet_encoding: '',    // VLESS 数据包编码
+            reality_opts: {
+                public_key: '',
+                short_id: '',
+                spider_x: '',
+                mldsa65_verify: ''
+            },
+            tls_opts: {
+                ech_config: '',
+                ech_doh_server: '',
+                ech_force_query: false,
+                pinned_peer_certificate_chain_sha256: []
+            },
+            tcp_opts: {
+                header_type: ''
+            },
+            // 保存所有已解码的 URI 查询参数，包括暂未映射的参数
+            uri_params: {},
             // Hysteria2 特有
             hysteria2_opts: {
                 obfs: '',
@@ -134,9 +194,11 @@ class BaseParser {
         const pairs = query.split('&');
 
         for (const pair of pairs) {
-            const [key, value] = pair.split('=');
+            const separatorIndex = pair.indexOf('=');
+            const key = separatorIndex === -1 ? pair : pair.slice(0, separatorIndex);
+            const value = separatorIndex === -1 ? '' : pair.slice(separatorIndex + 1);
             if (key) {
-                params[this.urlDecode(key)] = value ? this.urlDecode(value) : '';
+                params[this.urlDecode(key)] = this.urlDecode(value);
             }
         }
 
