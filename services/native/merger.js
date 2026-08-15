@@ -125,7 +125,7 @@ class NodeMerger {
         if (!sourceName) return { ...node };
 
         const originalName = node.name || "Unnamed Node";
-        return { ...node, name: `${originalName} (${sourceName})` };
+        return { ...node, name: `${originalName} (${sourceName})`, sourceName };
     }
 
     ensureUniqueNames(nodes) {

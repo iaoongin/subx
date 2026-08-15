@@ -3,8 +3,12 @@ const assert = require("node:assert/strict");
 
 const { detectSubscriptionFormat } = require("../../services/converter");
 const NativeConverter = require("../../services/native");
+const NodeMerger = require("../../services/native/merger");
 const YAMLParser = require("../../services/native/parsers/yaml");
 const ShadowsocksParser = require("../../services/native/parsers/shadowsocks");
+const VMessParser = require("../../services/native/parsers/vmess");
+const VLESSParser = require("../../services/native/parsers/vless");
+const TrojanParser = require("../../services/native/parsers/trojan");
 const MixedURIGenerator = require("../../services/native/generators/mixed-uri");
 const { normalizeOutputFormat } = require("../../services/native/formats");
 
@@ -92,4 +96,51 @@ test("subscription format detection defaults to URI and recognizes Clash/V2Ray",
   assert.equal(detectSubscriptionFormat("V2RayN", {}), "v2ray");
   assert.equal(detectSubscriptionFormat("Mozilla/5.0", { uri: "1" }), "uri");
   assert.equal(detectSubscriptionFormat("Mozilla/5.0", { v2ray: "1" }), "v2ray");
+});
+
+test("URI output appends subscription names without losing raw URI parameters", () => {
+  const vmessRaw = `vmess://${Buffer.from(JSON.stringify({
+    v: "2",
+    ps: "VMess",
+    add: "vmess.example.com",
+    port: 443,
+    id: "33333333-3333-3333-3333-333333333333",
+    net: "ws",
+    path: "/ws",
+    host: "cdn.example.com",
+  })).toString("base64")}`;
+  const rawUris = [
+    `ss://${Buffer.from("aes-256-gcm:ss-password").toString("base64url")}@ss.example.com:8388?plugin=obfs%3Bmode%3Dhttp#SS`,
+    vmessRaw,
+    "vless://44444444-4444-4444-4444-444444444444@vless.example.com:443?security=reality&pbk=PUBLIC_KEY#VLESS",
+    "trojan://trojan-password@trojan.example.com:443?sni=trojan.example.com#Trojan",
+  ];
+  const nodes = [
+    [new ShadowsocksParser(), rawUris[0]],
+    [new VMessParser(), rawUris[1]],
+    [new VLESSParser(), rawUris[2]],
+    [new TrojanParser(), rawUris[3]],
+  ].map(([parser, raw]) => {
+    const node = parser.parse(raw);
+    node.raw = raw;
+    return node;
+  });
+
+  const merged = new NodeMerger().merge([{ sourceName: "Plan A", nodes }]).nodes;
+  const output = Buffer.from(new MixedURIGenerator().generate(merged), "base64")
+    .toString("utf8")
+    .split(/\r?\n/)
+    .filter(Boolean);
+
+  const ss = output.find((uri) => uri.startsWith("ss://"));
+  const vmess = output.find((uri) => uri.startsWith("vmess://"));
+  const vless = output.find((uri) => uri.startsWith("vless://"));
+  const trojan = output.find((uri) => uri.startsWith("trojan://"));
+
+  assert.ok(ss.endsWith("#SS%20(Plan%20A)"));
+  assert.match(vless, /security=reality/);
+  assert.ok(vless.endsWith("#VLESS%20(Plan%20A)"));
+  assert.match(trojan, /sni=trojan.example.com/);
+  assert.ok(trojan.endsWith("#Trojan%20(Plan%20A)"));
+  assert.equal(JSON.parse(Buffer.from(vmess.slice(8), "base64").toString("utf8")).ps, "VMess (Plan A)");
 });

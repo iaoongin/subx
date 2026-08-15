@@ -17,7 +17,7 @@ class MixedURIGenerator extends BaseGenerator {
     convertToUri(node) {
         try {
             if (node?.raw && /^(vmess|vless|ss|trojan|hysteria2|hy2):\/\//i.test(node.raw)) {
-                return node.raw.trim();
+                return this.renameRawUri(node.raw, node.name, node.sourceName);
             }
 
             switch (node?.type) {
@@ -37,6 +37,69 @@ class MixedURIGenerator extends BaseGenerator {
         } catch (error) {
             console.error('转换混合 URI 失败:', error.message);
             return null;
+        }
+    }
+
+    renameRawUri(raw, name, sourceName = '') {
+        const uri = String(raw).trim();
+        if (!name) return uri;
+
+        const currentName = this.getRawUriName(uri);
+        if (currentName === name || (!currentName && !sourceName)) return uri;
+
+        if (/^vmess:\/\//i.test(uri)) {
+            const renamedVmess = this.renameVmessUri(uri, name);
+            if (renamedVmess) return renamedVmess;
+        }
+
+        return this.renameFragment(uri, name);
+    }
+
+    getRawUriName(uri) {
+        const hashIndex = uri.indexOf('#');
+        const fragment = hashIndex === -1 ? '' : uri.slice(hashIndex + 1);
+        const decodedFragment = fragment ? this.decodeFragment(fragment) : '';
+
+        if (!/^vmess:\/\//i.test(uri)) return decodedFragment;
+
+        const content = uri.slice(uri.indexOf('://') + 3, hashIndex === -1 ? uri.length : hashIndex);
+        try {
+            const config = JSON.parse(this.base64Decode(content));
+            return config.ps || config.remark || decodedFragment;
+        } catch {
+            return decodedFragment;
+        }
+    }
+
+    renameVmessUri(uri, name) {
+        const hashIndex = uri.indexOf('#');
+        const content = uri.slice(uri.indexOf('://') + 3, hashIndex === -1 ? uri.length : hashIndex);
+
+        try {
+            const config = JSON.parse(this.base64Decode(content));
+            config.ps = name;
+            return `vmess://${this.base64Encode(JSON.stringify(config))}`;
+        } catch {
+            return '';
+        }
+    }
+
+    renameFragment(uri, name) {
+        const hashIndex = uri.indexOf('#');
+        const base = hashIndex === -1 ? uri : uri.slice(0, hashIndex);
+        return `${base}#${encodeURIComponent(name)}`;
+    }
+
+    base64Decode(value) {
+        const normalized = String(value).replace(/-/g, '+').replace(/_/g, '/');
+        return Buffer.from(normalized, 'base64').toString('utf8');
+    }
+
+    decodeFragment(fragment) {
+        try {
+            return decodeURIComponent(fragment);
+        } catch {
+            return fragment;
         }
     }
 
